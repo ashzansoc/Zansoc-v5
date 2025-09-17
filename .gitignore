@@ -10,5 +10,11 @@
 # Large files to ignore
 prometheus-*.tar.gz
 prometheus-*/
-frontend/node_modules/.cache/
+frontend/node_modules/
+cli/venv/
+venv/
+node_modules/
 *.pack
+*.pyc
+__pycache__/
+.DS_Store
