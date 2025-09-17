@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 ZANSOC_DIR="$HOME/.zansoc"
 VENV_DIR="$ZANSOC_DIR/venv"
-REPO_URL="https://github.com/zansoc/zansoc-beta.git"
+ARCHIVE_URL="https://github.com/ashzansoc/Zansoc-v5/archive/refs/heads/main.zip"
 PYTHON_MIN_VERSION="3.9"
 
 # Logging
@@ -103,19 +103,14 @@ check_dependencies() {
     
     MISSING_DEPS=()
     
-    # Check for git
-    if ! command -v git >/dev/null 2>&1; then
-        MISSING_DEPS+=("git")
-    fi
-    
-    # Check for curl
-    if ! command -v curl >/dev/null 2>&1; then
+    # Check for curl or wget (at least one is needed for download)
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
         MISSING_DEPS+=("curl")
     fi
     
-    # Check for wget
-    if ! command -v wget >/dev/null 2>&1; then
-        MISSING_DEPS+=("wget")
+    # Check for unzip (needed for archive extraction)
+    if ! command -v unzip >/dev/null 2>&1; then
+        MISSING_DEPS+=("unzip")
     fi
     
     if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
@@ -141,21 +136,49 @@ create_directories() {
     log_success "Directories created at $ZANSOC_DIR"
 }
 
-# Clone or update repository
+# Download repository as ZIP archive (no authentication required)
 setup_repository() {
-    log_info "Setting up ZanSoc repository..."
+    log_info "Downloading ZanSoc repository..."
     
-    if [ -d "$ZANSOC_DIR/zansoc-beta" ]; then
-        log_info "Repository exists, updating..."
-        cd "$ZANSOC_DIR/zansoc-beta"
-        git pull origin main
-    else
-        log_info "Cloning repository..."
-        cd "$ZANSOC_DIR"
-        git clone "$REPO_URL"
+    cd "$ZANSOC_DIR"
+    
+    # Remove existing directory if it exists
+    if [ -d "Zansoc-v5" ]; then
+        log_info "Removing existing installation..."
+        rm -rf "Zansoc-v5"
     fi
     
-    log_success "Repository ready"
+    # Download the latest version as ZIP archive
+    log_info "Downloading latest version from GitHub..."
+    
+    if command -v wget >/dev/null 2>&1; then
+        if ! wget -O zansoc-main.zip "$ARCHIVE_URL" 2>/dev/null; then
+            log_error "Failed to download repository with wget"
+            exit 1
+        fi
+    elif command -v curl >/dev/null 2>&1; then
+        if ! curl -L -o zansoc-main.zip "$ARCHIVE_URL" 2>/dev/null; then
+            log_error "Failed to download repository with curl"
+            exit 1
+        fi
+    else
+        log_error "Neither wget nor curl available for download"
+        exit 1
+    fi
+    
+    # Extract archive
+    log_info "Extracting archive..."
+    if ! unzip -q zansoc-main.zip 2>/dev/null; then
+        log_error "Failed to extract archive"
+        rm -f zansoc-main.zip
+        exit 1
+    fi
+    
+    # Rename extracted directory
+    mv Zansoc-v5-main Zansoc-v5
+    rm zansoc-main.zip
+    
+    log_success "Repository downloaded and extracted successfully"
 }
 
 # Create Python virtual environment
@@ -181,7 +204,7 @@ install_cli() {
     log_info "Installing ZanSoc CLI..."
     
     source "$VENV_DIR/bin/activate"
-    cd "$ZANSOC_DIR/zansoc-beta/cli"
+    cd "$ZANSOC_DIR/Zansoc-v5/cli"
     
     # Install in development mode
     pip install -e .

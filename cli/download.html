@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,50 +11,50 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: #333;
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 2rem;
         }
-        
+
         .header {
             text-align: center;
             color: white;
             margin-bottom: 3rem;
         }
-        
+
         .header h1 {
             font-size: 3rem;
             margin-bottom: 1rem;
             font-weight: 700;
         }
-        
+
         .header p {
             font-size: 1.2rem;
             opacity: 0.9;
         }
-        
+
         .main-card {
             background: white;
             border-radius: 20px;
             padding: 3rem;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             margin-bottom: 2rem;
         }
-        
+
         .download-section {
             text-align: center;
             margin-bottom: 3rem;
         }
-        
+
         .download-button {
             display: inline-block;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -68,18 +69,18 @@
             border: none;
             cursor: pointer;
         }
-        
+
         .download-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
         }
-        
+
         .download-button.primary {
             background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
             font-size: 1.4rem;
             padding: 1.2rem 2.5rem;
         }
-        
+
         .code-block {
             background: #1e1e1e;
             color: #f8f8f2;
@@ -90,7 +91,7 @@
             position: relative;
             overflow-x: auto;
         }
-        
+
         .copy-button {
             position: absolute;
             top: 10px;
@@ -103,35 +104,35 @@
             cursor: pointer;
             font-size: 0.8rem;
         }
-        
+
         .features {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 2rem;
             margin: 3rem 0;
         }
-        
+
         .feature {
             text-align: center;
             padding: 2rem;
             background: #f8f9fa;
             border-radius: 15px;
         }
-        
+
         .feature-icon {
             font-size: 3rem;
             margin-bottom: 1rem;
         }
-        
+
         .feature h3 {
             margin-bottom: 1rem;
             color: #333;
         }
-        
+
         .steps {
             margin: 3rem 0;
         }
-        
+
         .step {
             display: flex;
             align-items: center;
@@ -140,7 +141,7 @@
             background: #f8f9fa;
             border-radius: 10px;
         }
-        
+
         .step-number {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -154,30 +155,30 @@
             margin-right: 1.5rem;
             flex-shrink: 0;
         }
-        
+
         .requirements {
             background: #e3f2fd;
             padding: 2rem;
             border-radius: 15px;
             margin: 2rem 0;
         }
-        
+
         .requirements h3 {
             color: #1976d2;
             margin-bottom: 1rem;
         }
-        
+
         .requirements ul {
             list-style: none;
             padding-left: 0;
         }
-        
+
         .requirements li {
             margin: 0.5rem 0;
             padding-left: 1.5rem;
             position: relative;
         }
-        
+
         .requirements li:before {
             content: "✓";
             color: #4CAF50;
@@ -185,7 +186,7 @@
             position: absolute;
             left: 0;
         }
-        
+
         .warning {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -194,7 +195,7 @@
             border-radius: 10px;
             margin: 1rem 0;
         }
-        
+
         .success {
             background: #d4edda;
             border: 1px solid #c3e6cb;
@@ -203,21 +204,21 @@
             border-radius: 10px;
             margin: 1rem 0;
         }
-        
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
             }
-            
+
             .main-card {
                 padding: 2rem;
             }
-            
+
             .step {
                 flex-direction: column;
                 text-align: center;
             }
-            
+
             .step-number {
                 margin-right: 0;
                 margin-bottom: 1rem;
@@ -225,28 +226,29 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>🚀 ZanSoc Provider</h1>
             <p>Join the distributed compute network and start earning rewards</p>
         </div>
-        
+
         <div class="main-card">
             <div class="download-section">
                 <h2>One-Click Provider Setup</h2>
                 <p>Get your Ubuntu device connected to the ZanSoc network in minutes</p>
                 <br>
-                
+
                 <a href="#" class="download-button primary" onclick="downloadFile()">
                     📦 Download for Ubuntu
                 </a>
-                
+
                 <div class="warning">
                     <strong>⚠️ Currently supports Ubuntu/Linux only.</strong> Windows and macOS support coming soon.
                 </div>
             </div>
-            
+
             <div class="requirements">
                 <h3>System Requirements</h3>
                 <ul>
@@ -257,32 +259,34 @@
                     <li>Sudo privileges for system installations</li>
                 </ul>
             </div>
-            
+
             <div class="steps">
                 <h2>Quick Start</h2>
-                
+
                 <div class="step">
                     <div class="step-number">1</div>
                     <div>
                         <h3>One-Line Install (Recommended)</h3>
                         <div class="code-block">
                             <button class="copy-button" onclick="copyToClipboard('install-cmd')">Copy</button>
-                            <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/zansoc/zansoc-beta/main/cli/install.sh | bash</code>
+                            <code
+                                id="install-cmd">curl -fsSL https://raw.githubusercontent.com/zansoc/zansoc-beta/main/cli/install.sh | bash</code>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="step">
                     <div class="step-number">2</div>
                     <div>
                         <h3>Or Manual Download</h3>
                         <div class="code-block">
                             <button class="copy-button" onclick="copyToClipboard('manual-cmd')">Copy</button>
-                            <code id="manual-cmd">wget https://github.com/zansoc/releases/zansoc-cli-linux.tar.gz<br>tar -xzf zansoc-cli-linux.tar.gz<br>cd zansoc-cli-linux && ./quick-install.sh</code>
+                            <code
+                                id="manual-cmd">wget https://github.com/zansoc/releases/zansoc-cli-linux.tar.gz<br>tar -xzf zansoc-cli-linux.tar.gz<br>cd zansoc-cli-linux && ./quick-install.sh</code>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="step">
                     <div class="step-number">3</div>
                     <div>
@@ -295,33 +299,33 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="features">
                 <div class="feature">
                     <div class="feature-icon">⚡</div>
                     <h3>Automated Setup</h3>
                     <p>Complete environment setup including miniconda, Python 3.13.7, and Ray cluster integration</p>
                 </div>
-                
+
                 <div class="feature">
                     <div class="feature-icon">🌐</div>
                     <h3>Secure Networking</h3>
                     <p>Automatic Tailscale VPN configuration for secure communication with the cluster</p>
                 </div>
-                
+
                 <div class="feature">
                     <div class="feature-icon">🔄</div>
                     <h3>Real-time Progress</h3>
                     <p>Beautiful progress tracking with live updates and error handling</p>
                 </div>
-                
+
                 <div class="feature">
                     <div class="feature-icon">💰</div>
                     <h3>Start Earning</h3>
                     <p>Begin earning rewards immediately after successful onboarding</p>
                 </div>
             </div>
-            
+
             <div class="success">
                 <h3>🎉 What Happens After Installation?</h3>
                 <ul style="list-style: none; padding-left: 0;">
@@ -332,40 +336,42 @@
                     <li style="margin: 0.5rem 0;">✅ Begin earning rewards for contributed resources</li>
                 </ul>
             </div>
-            
+
             <div style="text-align: center; margin-top: 3rem;">
                 <h3>Need Help?</h3>
                 <p>
                     <a href="https://docs.zansoc.com" style="color: #667eea;">📚 Documentation</a> |
-                    <a href="https://github.com/zansoc/zansoc-beta/issues" style="color: #667eea;">🐛 Report Issues</a> |
+                    <a href="https://github.com/zansoc/zansoc-beta/issues" style="color: #667eea;">🐛 Report Issues</a>
+                    |
                     <a href="mailto:support@zansoc.com" style="color: #667eea;">📧 Contact Support</a>
                 </p>
             </div>
         </div>
     </div>
-    
+
     <script>
         function copyToClipboard(elementId) {
             const element = document.getElementById(elementId);
             const text = element.textContent;
-            
-            navigator.clipboard.writeText(text).then(function() {
+
+            navigator.clipboard.writeText(text).then(function () {
                 const button = element.parentElement.querySelector('.copy-button');
                 const originalText = button.textContent;
                 button.textContent = 'Copied!';
                 button.style.background = '#4CAF50';
-                
-                setTimeout(function() {
+
+                setTimeout(function () {
                     button.textContent = originalText;
                     button.style.background = '#4CAF50';
                 }, 2000);
             });
         }
-        
+
         function downloadFile() {
             // In a real implementation, this would download the actual file
             alert('Download would start here!\n\nFor now, use the one-line install command:\n\ncurl -fsSL https://raw.githubusercontent.com/zansoc/zansoc-beta/main/cli/install.sh | bash');
         }
     </script>
 </body>
+
 </html>
