@@ -1,0 +1,24 @@
+
+
+
+download mini-conda
+configure conda and create env on 3.13.7 (must match master node v)
+git  clone to zansoc beta repo
+cd. Zansoc-beta   
+pip install --no-cache-dir -r requirements.txt
+pip install "ray[default,data,train,tune,rllib]"
+
+curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up --auth-key=tskey-auth-kd32Q6XdHS11CNTRL-X13DpHNm9ygqbdavCzngxgEJg91Rgie6 (get Tailscale id from API)
+
+Or 
+
+curl -fsSL https://pkgs.tailscale.com/stable/tailscale_1.88.1_arm64.tgz -o tailscale.tgz
+tar xzf tailscale.tgz
+sudo cp tailscale_*/tailscaled /usr/sbin/
+sudo cp tailscale_*/tailscale /usr/bin/
+sudo tailscaled &
+sudo tailscale up --auth-key=tskey-auth-kd32Q6XdHS11CNTRL-X13DpHNm9ygqbdavCzngxgEJg91Rgie6
+
+export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1 && ray start --address='100.101.84.71:6379' --redis-password='zansoc_secure_password_change_me'
+
+

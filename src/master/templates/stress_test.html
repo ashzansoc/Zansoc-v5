@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ray Stress Test</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Ray Cluster Stress Test</h1>
+        <div id="node-info">
+            <h2>Ray Nodes</h2>
+            <ul id="node-list"></ul>
+            <p id="node-status">Loading node information...</p>
+        </div>
+        <button id="run-stress-test">Run Stress Test</button>
+        <div id="stress-test-status">
+            <h2>Stress Test Status</h2>
+            <p id="test-message"></p>
+            <pre id="test-output"></pre>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/stress_test.js') }}"></script>
+</body>
+</html>

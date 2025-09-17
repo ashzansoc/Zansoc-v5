@@ -113,11 +113,16 @@ def start_ray_head(config):
         logger.info(f"  - Dashboard: http://{dashboard_host}:{dashboard_port}")
         logger.info(f"  - Resources: {resources}")
 
+        # Get the site-packages path of the current virtual environment
+        # Assuming the virtual environment is named 'venv' and is in the project root
+        base_path = Path(__file__).parent.parent.parent
+        site_packages_path = os.path.join(base_path, 'venv', 'lib', f'python{sys.version_info.major}.{sys.version_info.minor}', 'site-packages')
+
         # Initialize Ray if not already initialized
         if not ray.is_initialized():
-            ray.init(**ray_init_args)
-        else:
-            logger.info("Ray is already initialized, skipping ray.init() call.")
+            # Resolve the absolute path for conda_env.yaml for runtime_env
+            conda_env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../conda_env.yaml"))
+            ray.init(**ray_init_args, runtime_env={"conda": conda_env_path, "env_vars": {"PYTHONPATH": site_packages_path}})
 
         # Get cluster info
         nodes_info = ray.nodes()

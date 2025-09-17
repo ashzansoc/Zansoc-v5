@@ -1,0 +1,11 @@
+name: zansoc_ray_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10  # Use a specific Python version compatible with your project
+  - pip
+  - gcc  # To provide the build tools like gcc
+  - netifaces # Explicitly add netifaces
+  - pip:
+      - -r src/master/requirements.txt

@@ -7,7 +7,7 @@ def sample_task(x):
     return x * x
 
 if __name__ == "__main__":
-    ray.init(address="auto") # Connect to the existing Ray cluster
+    # ray.init(address="auto") # Connect to the existing Ray cluster - Ray should be initialized by the master application.
 
     # Submit a series of tasks
     results = []

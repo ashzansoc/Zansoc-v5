@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyLlama Chat Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 800px;
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            max-height: calc(100vh - 40px);
+        }
+        .chat-box {
+            border: 1px solid #ddd;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #e9e9e9;
+            flex-grow: 1;
+        }
+        .message {
+            margin-bottom: 8px;
+        }
+        .message.user {
+            text-align: right;
+            color: #007bff;
+        }
+        .message.llama {
+            text-align: left;
+            color: #28a745;
+        }
+        .input-form {
+            display: flex;
+            margin-top: 10px;
+        }
+        .input-form input[type="text"] {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            outline: none;
+        }
+        .input-form button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            outline: none;
+        }
+        .input-form button:hover {
+            background-color: #0056b3;
+        }
+        .tps-display {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+            text-align: right;
+            display: inline-block; /* Allows other elements to sit next to it */
+            margin-left: 10px; /* Space between TPS and nodes */
+        }
+        .model-loading {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #ffc107;
+            text-align: center;
+            font-weight: bold;
+        }
+        .metrics-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .node-display {
+            font-size: 0.9em;
+            color: #666;
+            text-align: left;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TinyLlama Chat</h1>
+        <div class="model-loading" id="modelLoading">Llama: TinyLlama model is still loading. Please try again in a moment.</div>
+        <div class="chat-box" id="chatBox"></div>
+        <div class="metrics-container">
+            <div class="node-display" id="nodeDisplay">Active Nodes: 0</div>
+            <div class="tps-display" id="tpsDisplay">Tokens/s: 0.00</div>
+        </div>
+        <form class="input-form" id="messageForm">
+            <input type="text" id="messageInput" placeholder="Type your message...">
+            <button type="submit">Send</button>
+        </form>
+    </div>
+
+    <script type="text/javascript">
+        var socket = io();
+
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+
+        socket.on('response', function(msg) {
+            var chatBox = document.getElementById('chatBox');
+            var modelLoading = document.getElementById('modelLoading');
+            modelLoading.style.display = 'none'; // Hide loading message on first response
+            var messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'llama');
+            messageElement.innerHTML = '<b>Llama:</b> ' + msg.text;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
+
+        socket.on('tps_update', function(msg) {
+            document.getElementById('tpsDisplay').innerText = 'Tokens/s: ' + msg.tps;
+            document.getElementById('nodeDisplay').innerText = 'Active Nodes: ' + msg.nodes;
+        });
+
+        document.getElementById('messageForm').onsubmit = function(e) {
+            e.preventDefault();
+            var input = document.getElementById('messageInput');
+            var message = input.value;
+            if (message.trim() === '') return;
+
+            var chatBox = document.getElementById('chatBox');
+            var messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'user');
+            messageElement.innerHTML = '<b>You:</b> ' + message;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            socket.emit('chat_message', { data: message });
+            input.value = '';
+        };
+    </script>
+</body>
+</html>

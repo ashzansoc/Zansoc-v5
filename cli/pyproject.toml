@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zansoc-cli"
+version = "1.0.0"
+description = "ZanSoc Provider Onboarding CLI - Join the distributed compute network"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "ZanSoc Team", email = "support@zansoc.com"},
+]
+maintainers = [
+    {name = "ZanSoc Team", email = "support@zansoc.com"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: System :: Networking",
+]
+keywords = ["distributed-computing", "ray", "cluster", "provider", "onboarding"]
+dependencies = [
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "requests>=2.25.0",
+    "pyyaml>=6.0",
+    "psutil>=5.8.0",
+]
+requires-python = ">=3.9"
+
+[project.urls]
+Homepage = "https://github.com/zansoc/zansoc-beta"
+Documentation = "https://docs.zansoc.com"
+Repository = "https://github.com/zansoc/zansoc-beta"
+"Bug Tracker" = "https://github.com/zansoc/zansoc-beta/issues"
+
+[project.scripts]
+zansoc = "zansoc_cli.seamless_cli:main"
+zansoc-onboard = "zansoc_cli.seamless_cli:main"
+zansoc-cli = "zansoc_cli.main:main"
+
+[tool.setuptools]
+packages = ["zansoc_cli", "zansoc_cli.utils", "zansoc_cli.config", "zansoc_cli.scripts"]
+
+[tool.setuptools.package-data]
+zansoc_cli = ["config/*.yml", "scripts/*.sh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["zansoc_cli"]
+omit = ["*/tests/*", "*/test_*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]

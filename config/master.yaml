@@ -34,3 +34,4 @@ model_config:
   quantization: "int8"  # Quantize model to reduce memory footprint
   batch_size: 1
   max_length: 512
+  num_llama_actors: 2 # Number of TinyLlamaActor instances to create

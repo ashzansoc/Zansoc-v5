@@ -1,0 +1,23 @@
+# Default configuration for ZanSoc CLI
+cluster:
+  master_address: "100.101.84.71:6379"
+  password: "zansoc_secure_password_change_me"
+
+tailscale:
+  auth_key: "tskey-auth-kd32Q6XdHS11CNTRL-X13DpHNm9ygqbdavCzngxgEJg91Rgie6"
+
+environment:
+  python_version: "3.13.7"
+  repository_url: "https://github.com/zansoc/zansoc-beta.git"
+
+database:
+  path: "data/providers.db"
+
+logging:
+  level: "INFO"
+  file: "logs/onboarding.log"
+
+auth:
+  username: "admin"
+  password: "admin"
+  max_attempts: 3
