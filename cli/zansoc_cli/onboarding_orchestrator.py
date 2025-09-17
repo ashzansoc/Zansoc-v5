@@ -292,7 +292,7 @@ class OnboardingOrchestrator:
             
             # Create conda environment
             self.logger.info("Creating conda environment...")
-            env_result = self.environment_manager.create_conda_environment("zansoc", "3.13.7")
+            env_result = self.environment_manager.create_conda_environment("3.13.7", "zansoc")
             if not env_result.success:
                 return StepResult(
                     success=False,
@@ -306,8 +306,8 @@ class OnboardingOrchestrator:
             # Clone repository
             self.logger.info("Cloning repository...")
             repo_result = self.environment_manager.clone_repository(
-                "https://github.com/zansoc/zansoc-beta.git",
-                str(Path.home() / ".zansoc" / "zansoc-beta")
+                "https://github.com/ashzansoc/Zansoc-v5.git",
+                str(Path.home() / ".zansoc" / "Zansoc-v5")
             )
             if not repo_result.success:
                 return StepResult(
@@ -321,19 +321,23 @@ class OnboardingOrchestrator:
             
             # Install requirements
             self.logger.info("Installing requirements...")
-            req_result = self.environment_manager.install_requirements(
-                str(Path.home() / ".zansoc" / "zansoc-beta" / "requirements.txt"),
-                "zansoc"
-            )
-            if not req_result.success:
-                return StepResult(
-                    success=False,
-                    step=OnboardingStep.ENVIRONMENT_SETUP,
-                    message="Failed to install requirements",
-                    error=req_result.error,
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
+            requirements_path = Path.home() / ".zansoc" / "Zansoc-v5" / "cli" / "requirements.txt"
+            if requirements_path.exists():
+                req_result = self.environment_manager.install_requirements(
+                    str(requirements_path),
+                    "zansoc"
                 )
+                if not req_result.success:
+                    return StepResult(
+                        success=False,
+                        step=OnboardingStep.ENVIRONMENT_SETUP,
+                        message="Failed to install requirements",
+                        error=req_result.error,
+                        execution_time=time.time() - start_time,
+                        retry_suggested=True
+                    )
+            else:
+                self.logger.info("No requirements.txt found, skipping requirements installation")
             
             # Install Ray
             self.logger.info("Installing Ray...")

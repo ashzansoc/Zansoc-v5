@@ -94,34 +94,58 @@ class EnvironmentManager:
                     execution_time=time.time() - start_time
                 )
             
-            # Download miniconda installer
-            with tempfile.TemporaryDirectory() as temp_dir:
-                installer_path = Path(temp_dir) / "miniconda_installer"
-                
-                self.logger.info(f"Downloading miniconda from {download_url}")
-                if not self.platform_utils.download_file(download_url, str(installer_path)):
-                    return InstallationResult(
-                        success=False,
-                        status=InstallationStatus.FAILED,
-                        message="Failed to download miniconda installer",
-                        error="Download failed",
-                        execution_time=time.time() - start_time
+            # Try to install miniconda
+            install_success = False
+            
+            # Method 1: Try system package manager first (faster)
+            if self.system_info.platform == PlatformType.LINUX:
+                self.logger.info("Trying to install miniconda via system package manager...")
+                # Try apt-get for Ubuntu/Debian
+                result = self.platform_utils.execute_command("which apt-get", timeout=10)
+                if result.success:
+                    # Install miniconda via apt if available
+                    result = self.platform_utils.execute_command(
+                        "sudo apt-get update && sudo apt-get install -y wget", 
+                        timeout=300
                     )
-                
-                # Make installer executable (Unix systems)
-                if self.system_info.platform != PlatformType.WINDOWS:
-                    os.chmod(installer_path, 0o755)
-                
-                # Run installer
-                install_result = self._run_miniconda_installer(installer_path)
-                if not install_result:
-                    return InstallationResult(
-                        success=False,
-                        status=InstallationStatus.FAILED,
-                        message="Miniconda installation failed",
-                        error="Installer execution failed",
-                        execution_time=time.time() - start_time
-                    )
+                    if result.success:
+                        # Download and install via wget + bash
+                        install_cmd = f"wget -q {download_url} -O /tmp/miniconda.sh && bash /tmp/miniconda.sh -b -p {self.miniconda_path} && rm /tmp/miniconda.sh"
+                        result = self.platform_utils.execute_command(install_cmd, timeout=900)
+                        install_success = result.success
+                        if install_success:
+                            self.logger.info("Miniconda installed via system package manager")
+            
+            # Method 2: Download and install manually if system method failed
+            if not install_success:
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    installer_path = Path(temp_dir) / "miniconda_installer"
+                    
+                    self.logger.info(f"Downloading miniconda from {download_url}")
+                    if not self.platform_utils.download_file(download_url, str(installer_path), timeout=900):  # 15 minutes
+                        return InstallationResult(
+                            success=False,
+                            status=InstallationStatus.FAILED,
+                            message="Failed to download miniconda installer",
+                            error="Download failed - check internet connection and try again",
+                            execution_time=time.time() - start_time
+                        )
+                    
+                    # Make installer executable (Unix systems)
+                    if self.system_info.platform != PlatformType.WINDOWS:
+                        os.chmod(installer_path, 0o755)
+                    
+                    # Run installer
+                    self.logger.info("Running miniconda installer...")
+                    install_result = self._run_miniconda_installer(installer_path)
+                    if not install_result:
+                        return InstallationResult(
+                            success=False,
+                            status=InstallationStatus.FAILED,
+                            message="Miniconda installation failed",
+                            error="Installer execution failed - check permissions and disk space",
+                            execution_time=time.time() - start_time
+                        )
             
             # Verify installation
             if not self._is_miniconda_installed():
@@ -242,10 +266,10 @@ class EnvironmentManager:
             )
     
     def clone_repository(self, repo_url: str, target_dir: Optional[str] = None) -> InstallationResult:
-        """Clone ZanSoc repository with git integration.
+        """Download ZanSoc repository as ZIP archive (no authentication required).
         
         Args:
-            repo_url: Repository URL to clone
+            repo_url: Repository URL (will be converted to ZIP download URL)
             target_dir: Target directory (defaults to self.repo_path)
             
         Returns:
@@ -255,70 +279,109 @@ class EnvironmentManager:
         
         try:
             target_path = Path(target_dir) if target_dir else self.repo_path
-            self.logger.info(f"Cloning repository {repo_url} to {target_path}")
+            self.logger.info(f"Downloading repository from {repo_url} to {target_path}")
             
             # Check if repository already exists
-            if target_path.exists() and (target_path / ".git").exists():
-                # Try to get current remote URL
-                result = self.platform_utils.execute_command(
-                    "git remote get-url origin", 
-                    cwd=str(target_path)
+            if target_path.exists() and any(target_path.iterdir()):
+                self.logger.info(f"Repository already exists at {target_path}")
+                return InstallationResult(
+                    success=True,
+                    status=InstallationStatus.SKIPPED,
+                    message=f"Repository already exists at {target_path}",
+                    installation_path=str(target_path),
+                    execution_time=time.time() - start_time
                 )
-                if result.success and result.stdout.strip() == repo_url:
-                    self.logger.info(f"Repository already cloned at {target_path}")
-                    return InstallationResult(
-                        success=True,
-                        status=InstallationStatus.SKIPPED,
-                        message=f"Repository already cloned at {target_path}",
-                        installation_path=str(target_path),
-                        execution_time=time.time() - start_time
-                    )
             
-            # Remove existing directory if it exists but is not a git repo
+            # Remove existing directory if it exists
             if target_path.exists():
                 shutil.rmtree(target_path)
             
             # Ensure parent directory exists
             target_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Clone repository
-            clone_cmd = f"git clone {repo_url} {target_path}"
-            result = self.platform_utils.execute_command(clone_cmd, timeout=300)
-            
-            if not result.success:
+            # Convert GitHub repo URL to ZIP download URL
+            if "github.com" in repo_url:
+                # Convert https://github.com/user/repo.git to ZIP download URL
+                repo_url = repo_url.replace(".git", "")
+                zip_url = f"{repo_url}/archive/refs/heads/main.zip"
+            else:
                 return InstallationResult(
                     success=False,
                     status=InstallationStatus.FAILED,
-                    message=f"Failed to clone repository {repo_url}",
-                    error=result.stderr,
+                    message="Unsupported repository URL format",
+                    error="Only GitHub repositories are supported",
                     execution_time=time.time() - start_time
                 )
             
-            # Verify clone
-            if not target_path.exists() or not (target_path / ".git").exists():
+            # Download repository as ZIP
+            with tempfile.TemporaryDirectory() as temp_dir:
+                zip_path = Path(temp_dir) / "repo.zip"
+                
+                self.logger.info(f"Downloading repository archive from {zip_url}")
+                if not self.platform_utils.download_file(zip_url, str(zip_path)):
+                    return InstallationResult(
+                        success=False,
+                        status=InstallationStatus.FAILED,
+                        message="Failed to download repository archive",
+                        error="Download failed",
+                        execution_time=time.time() - start_time
+                    )
+                
+                # Extract ZIP archive
+                import zipfile
+                try:
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(temp_dir)
+                    
+                    # Find the extracted directory (usually repo-name-main)
+                    extracted_dirs = [d for d in Path(temp_dir).iterdir() if d.is_dir() and d.name != "__pycache__"]
+                    if not extracted_dirs:
+                        return InstallationResult(
+                            success=False,
+                            status=InstallationStatus.FAILED,
+                            message="No directory found in extracted archive",
+                            error="Archive extraction failed",
+                            execution_time=time.time() - start_time
+                        )
+                    
+                    # Move the extracted directory to target location
+                    extracted_dir = extracted_dirs[0]
+                    shutil.move(str(extracted_dir), str(target_path))
+                    
+                except zipfile.BadZipFile:
+                    return InstallationResult(
+                        success=False,
+                        status=InstallationStatus.FAILED,
+                        message="Downloaded file is not a valid ZIP archive",
+                        error="Invalid ZIP file",
+                        execution_time=time.time() - start_time
+                    )
+            
+            # Verify download
+            if not target_path.exists() or not any(target_path.iterdir()):
                 return InstallationResult(
                     success=False,
                     status=InstallationStatus.FAILED,
-                    message="Repository clone verification failed",
-                    error="Repository directory or .git not found after clone",
+                    message="Repository download verification failed",
+                    error="Repository directory not found or empty after download",
                     execution_time=time.time() - start_time
                 )
             
-            self.logger.info(f"Repository cloned successfully to {target_path}")
+            self.logger.info(f"Repository downloaded successfully to {target_path}")
             return InstallationResult(
                 success=True,
                 status=InstallationStatus.COMPLETED,
-                message=f"Repository cloned successfully to {target_path}",
+                message=f"Repository downloaded successfully to {target_path}",
                 installation_path=str(target_path),
                 execution_time=time.time() - start_time
             )
             
         except Exception as e:
-            self.logger.error(f"Repository cloning failed: {e}")
+            self.logger.error(f"Repository download failed: {e}")
             return InstallationResult(
                 success=False,
                 status=InstallationStatus.FAILED,
-                message="Repository cloning failed with exception",
+                message="Repository download failed with exception",
                 error=str(e),
                 execution_time=time.time() - start_time
             )
@@ -569,7 +632,14 @@ class EnvironmentManager:
                 # Unix installer
                 install_cmd = f'bash "{installer_path}" -b -p "{self.miniconda_path}"'
             
-            result = self.platform_utils.execute_command(install_cmd, timeout=600)
+            self.logger.info(f"Executing installer command: {install_cmd}")
+            result = self.platform_utils.execute_command(install_cmd, timeout=900)  # 15 minutes
+            
+            if not result.success:
+                self.logger.error(f"Installer failed with exit code {result.return_code}")
+                self.logger.error(f"Installer stderr: {result.stderr}")
+                self.logger.error(f"Installer stdout: {result.stdout}")
+            
             return result.success
             
         except Exception as e:

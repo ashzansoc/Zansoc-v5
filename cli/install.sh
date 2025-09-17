@@ -138,14 +138,19 @@ create_directories() {
 
 # Download repository as ZIP archive (no authentication required)
 setup_repository() {
-    log_info "Downloading ZanSoc repository..."
+    log_info "Setting up ZanSoc repository..."
     
     cd "$ZANSOC_DIR"
     
-    # Remove existing directory if it exists
+    # Remove existing directories if they exist (clean up old installations)
     if [ -d "Zansoc-v5" ]; then
-        log_info "Removing existing installation..."
+        log_info "Removing existing Zansoc-v5 installation..."
         rm -rf "Zansoc-v5"
+    fi
+    
+    if [ -d "zansoc-beta" ]; then
+        log_info "Removing old zansoc-beta installation..."
+        rm -rf "zansoc-beta"
     fi
     
     # Download the latest version as ZIP archive
