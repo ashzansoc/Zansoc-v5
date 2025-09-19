@@ -120,6 +120,17 @@ class ProviderManager:
             self.logger.error(f"Error retrieving provider {provider_id}: {e}")
             return None
     
+    def get_provider(self, provider_id: str) -> Optional[Provider]:
+        """Get provider by ID (alias for get_provider_by_id).
+        
+        Args:
+            provider_id: Provider ID
+            
+        Returns:
+            Provider instance or None if not found
+        """
+        return self.get_provider_by_id(provider_id)
+    
     def get_provider_by_username(self, username: str) -> Optional[Provider]:
         """Get provider by username.
         
