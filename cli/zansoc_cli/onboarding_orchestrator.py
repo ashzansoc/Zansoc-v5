@@ -275,9 +275,9 @@ class OnboardingOrchestrator:
             )
     
     async def _step_environment_setup(self, start_time: float) -> StepResult:
-        """Execute environment setup step with simplified approach."""
+        """Execute environment setup step with smart detection of existing installations."""
         try:
-            self.logger.info("Starting simplified environment setup...")
+            self.logger.info("Starting smart environment setup...")
             
             # Step 1: Check Python version
             self.logger.info("Checking Python installation...")
@@ -295,69 +295,101 @@ class OnboardingOrchestrator:
             python_version = python_check.stdout.strip()
             self.logger.info(f"Found {python_version}")
             
-            # Step 2: Install pip packages directly (no conda needed)
-            self.logger.info("Installing Ray using pip...")
-            ray_install = self.platform_utils.execute_command(
-                "python3 -m pip install --user ray[default] --quiet", 
-                timeout=600
-            )
-            if not ray_install.success:
-                self.logger.warning("Ray installation failed, trying without [default]...")
-                ray_install = self.platform_utils.execute_command(
-                    "python3 -m pip install --user ray --quiet", 
-                    timeout=600
-                )
-                if not ray_install.success:
-                    return StepResult(
-                        success=False,
-                        step=OnboardingStep.ENVIRONMENT_SETUP,
-                        message="Failed to install Ray",
-                        error=f"Ray installation failed: {ray_install.stderr}",
-                        execution_time=time.time() - start_time,
-                        retry_suggested=True
-                    )
-            
-            # Step 3: Install other required packages
-            self.logger.info("Installing additional packages...")
-            packages = ["requests", "pyyaml", "rich", "psutil"]
-            for package in packages:
-                install_result = self.platform_utils.execute_command(
-                    f"python3 -m pip install --user {package} --quiet", 
-                    timeout=120
-                )
-                if not install_result.success:
-                    self.logger.warning(f"Failed to install {package}, continuing...")
-            
-            # Step 4: Verify Ray installation
-            self.logger.info("Verifying Ray installation...")
-            ray_verify = self.platform_utils.execute_command(
-                "python3 -c 'import ray; print(f\"Ray {ray.__version__} installed successfully\")'", 
+            # Step 2: Check if Ray is already installed and working
+            self.logger.info("Checking for existing Ray installation...")
+            ray_check = self.platform_utils.execute_command(
+                "python3 -c 'import ray; print(f\"Ray {ray.__version__} already available\")'", 
                 timeout=30
             )
-            if not ray_verify.success:
+            
+            if ray_check.success and "Ray" in ray_check.stdout:
+                # Ray is already installed and working!
+                ray_version = ray_check.stdout.strip()
+                self.logger.info(f"✅ {ray_version} - skipping installation")
+                
                 return StepResult(
-                    success=False,
+                    success=True,
                     step=OnboardingStep.ENVIRONMENT_SETUP,
-                    message="Ray installation verification failed",
-                    error="Ray import failed after installation",
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
+                    message="Environment setup completed (existing Ray installation detected)",
+                    data={
+                        'python_version': python_version,
+                        'ray_version': ray_version,
+                        'installation_method': 'existing_installation',
+                        'skipped_installation': True
+                    },
+                    execution_time=time.time() - start_time
                 )
             
-            ray_version = ray_verify.stdout.strip()
-            self.logger.info(f"Ray verification successful: {ray_version}")
+            # Step 3: Ray not found, try to install it
+            self.logger.info("Ray not found, attempting installation...")
             
+            # Try conda first if available
+            conda_check = self.platform_utils.execute_command("conda --version", timeout=10)
+            if conda_check.success:
+                self.logger.info("Conda detected, trying conda installation...")
+                conda_install = self.platform_utils.execute_command(
+                    "conda install -c conda-forge ray -y", 
+                    timeout=300
+                )
+                if conda_install.success:
+                    # Verify conda installation
+                    ray_verify = self.platform_utils.execute_command(
+                        "python3 -c 'import ray; print(f\"Ray {ray.__version__} installed via conda\")'", 
+                        timeout=30
+                    )
+                    if ray_verify.success:
+                        ray_version = ray_verify.stdout.strip()
+                        self.logger.info(f"✅ Conda installation successful: {ray_version}")
+                        
+                        return StepResult(
+                            success=True,
+                            step=OnboardingStep.ENVIRONMENT_SETUP,
+                            message="Environment setup completed (conda installation)",
+                            data={
+                                'python_version': python_version,
+                                'ray_version': ray_version,
+                                'installation_method': 'conda',
+                            },
+                            execution_time=time.time() - start_time
+                        )
+            
+            # Step 4: Fallback to pip installation
+            self.logger.info("Trying pip installation as fallback...")
+            pip_install = self.platform_utils.execute_command(
+                "python3 -m pip install --user ray --quiet", 
+                timeout=300
+            )
+            
+            if pip_install.success:
+                # Verify pip installation
+                ray_verify = self.platform_utils.execute_command(
+                    "python3 -c 'import ray; print(f\"Ray {ray.__version__} installed via pip\")'", 
+                    timeout=30
+                )
+                if ray_verify.success:
+                    ray_version = ray_verify.stdout.strip()
+                    self.logger.info(f"✅ Pip installation successful: {ray_version}")
+                    
+                    return StepResult(
+                        success=True,
+                        step=OnboardingStep.ENVIRONMENT_SETUP,
+                        message="Environment setup completed (pip installation)",
+                        data={
+                            'python_version': python_version,
+                            'ray_version': ray_version,
+                            'installation_method': 'pip',
+                        },
+                        execution_time=time.time() - start_time
+                    )
+            
+            # Step 5: All installation methods failed
             return StepResult(
-                success=True,
+                success=False,
                 step=OnboardingStep.ENVIRONMENT_SETUP,
-                message="Environment setup completed successfully (simplified)",
-                data={
-                    'python_version': python_version,
-                    'ray_version': ray_version,
-                    'installation_method': 'system_pip',
-                    'packages_installed': ['ray', 'requests', 'pyyaml', 'rich', 'psutil']
-                },
-                execution_time=time.time() - start_time
+                message="All Ray installation methods failed",
+                error="Could not install Ray via conda or pip",
+                execution_time=time.time() - start_time,
+                retry_suggested=True
             )
             
         except Exception as e:
