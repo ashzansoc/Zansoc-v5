@@ -163,8 +163,8 @@ install_pip_manually() {
         return 1
     fi
     
-    # Install pip in user mode
-    if python3 get-pip.py --user --quiet; then
+    # Install pip in user mode (handle PEP 668 externally-managed-environment)
+    if python3 get-pip.py --user --quiet --break-system-packages 2>/dev/null || python3 get-pip.py --user --quiet; then
         log_success "Pip installed successfully"
         
         # Add ~/.local/bin to PATH if not already there
@@ -295,7 +295,8 @@ install_cli() {
     # Check if we're using virtual environment or user mode
     if [ -f "$ZANSOC_DIR/.user_mode" ]; then
         log_info "Installing in user mode..."
-        python3 -m pip install --user -e .
+        # Handle PEP 668 externally-managed-environment
+        python3 -m pip install --user -e . --break-system-packages 2>/dev/null || python3 -m pip install --user -e .
     else
         source "$VENV_DIR/bin/activate"
         pip install -e .

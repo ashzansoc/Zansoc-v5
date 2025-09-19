@@ -353,14 +353,25 @@ class OnboardingOrchestrator:
                             execution_time=time.time() - start_time
                         )
             
-            # Step 4: Fallback to pip installation
+            # Step 4: Fallback to pip installation (handle PEP 668)
             self.logger.info("Trying pip installation as fallback...")
-            pip_install = self.platform_utils.execute_command(
-                "python3 -m pip install --user ray --quiet", 
-                timeout=300
-            )
             
-            if pip_install.success:
+            # Try with --break-system-packages first, then without
+            pip_commands = [
+                "python3 -m pip install --user ray --quiet --break-system-packages",
+                "python3 -m pip install --user ray --quiet"
+            ]
+            
+            pip_success = False
+            for cmd in pip_commands:
+                pip_install = self.platform_utils.execute_command(cmd, timeout=300)
+                if pip_install.success:
+                    pip_success = True
+                    break
+                else:
+                    self.logger.warning(f"Command failed: {cmd}")
+            
+            if pip_success:
                 # Verify pip installation
                 ray_verify = self.platform_utils.execute_command(
                     "python3 -c 'import ray; print(f\"Ray {ray.__version__} installed via pip\")'", 
