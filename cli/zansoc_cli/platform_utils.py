@@ -232,7 +232,7 @@ class PlatformUtils:
             self.logger.error(f"Prerequisites check failed: {e}")
             return [f"Prerequisites check error: {e}"]
     
-    def execute_command(self, command: str, shell: bool = False, timeout: int = 300, 
+    def execute_command(self, command: str, shell: bool = True, timeout: int = 300, 
                        cwd: Optional[str] = None, env: Optional[Dict[str, str]] = None) -> CommandResult:
         """Execute a system command with error handling and timeout.
         

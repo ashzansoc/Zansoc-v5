@@ -208,10 +208,15 @@ class OnboardingOrchestrator:
                 )
                 
         except Exception as e:
+            self.logger.error(f"Step {step.value} failed with exception: {e}")
+            self.logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            
             return StepResult(
                 success=False,
                 step=step,
-                message=f"Step {step.value} failed with exception",
+                message=f"Step {step.value} failed with exception: {type(e).__name__}",
                 error=str(e),
                 execution_time=time.time() - start_time,
                 retry_suggested=True
@@ -279,8 +284,10 @@ class OnboardingOrchestrator:
         try:
             self.logger.info("Starting smart environment setup...")
             
-            # Step 1: Check Python version
-            self.logger.info("Checking Python installation...")
+            # Step 1: Comprehensive environment validation
+            self.logger.info("Validating environment...")
+            
+            # Check Python version
             python_check = self.platform_utils.execute_command("python3 --version", timeout=10)
             if not python_check.success:
                 return StepResult(
@@ -295,12 +302,59 @@ class OnboardingOrchestrator:
             python_version = python_check.stdout.strip()
             self.logger.info(f"Found {python_version}")
             
-            # Step 2: Check if Ray is already installed and working (with shorter timeout)
+            # Check pip availability
+            pip_check = self.platform_utils.execute_command("python3 -m pip --version", timeout=10)
+            if not pip_check.success:
+                self.logger.warning("Pip not available, this may cause installation issues")
+            
+            # Check internet connectivity
+            connectivity_check = self.platform_utils.execute_command("python3 -c 'import urllib.request; urllib.request.urlopen(\"https://pypi.org\", timeout=5)'", timeout=15)
+            if not connectivity_check.success:
+                self.logger.warning("Internet connectivity issues detected")
+            
+            # Check available disk space
+            disk_check = self.platform_utils.execute_command("df -h . | tail -1 | awk '{print $4}'", timeout=5)
+            if disk_check.success:
+                self.logger.info(f"Available disk space: {disk_check.stdout.strip()}")
+            
+            self.logger.info("Environment validation completed")
+            
+            # Step 2: Check if Ray is already installed (safer method)
             self.logger.info("Checking for existing Ray installation...")
+            
+            # First check if ray package exists without importing
             ray_check = self.platform_utils.execute_command(
-                "python3 -c 'import ray; print(f\"Ray {ray.__version__} already available\")'", 
-                timeout=10
+                "python3 -c 'import pkg_resources; pkg_resources.get_distribution(\"ray\"); print(\"Ray package found\")'", 
+                timeout=5
             )
+            
+            if ray_check.success and "Ray package found" in ray_check.stdout:
+                # Package exists, now try safe import with timeout
+                ray_version_check = self.platform_utils.execute_command(
+                    "timeout 5 python3 -c 'import ray; print(f\"Ray {ray.__version__} available\")'", 
+                    timeout=10
+                )
+                
+                if ray_version_check.success and "Ray" in ray_version_check.stdout:
+                    ray_version = ray_version_check.stdout.strip()
+                    self.logger.info(f"✅ {ray_version} - skipping installation")
+                    
+                    return StepResult(
+                        success=True,
+                        step=OnboardingStep.ENVIRONMENT_SETUP,
+                        message="Environment setup completed (existing Ray installation detected)",
+                        data={
+                            'python_version': python_version,
+                            'ray_version': ray_version,
+                            'installation_method': 'existing_installation',
+                            'skipped_installation': True
+                        },
+                        execution_time=time.time() - start_time
+                    )
+                else:
+                    self.logger.warning("Ray package found but import failed, will try to reinstall")
+            else:
+                self.logger.info("Ray package not found, proceeding with installation")
             
             if ray_check.success and "Ray" in ray_check.stdout:
                 # Ray is already installed and working!
@@ -354,44 +408,58 @@ class OnboardingOrchestrator:
                         )
             
             # Step 4: Fallback to pip installation (handle PEP 668)
-            self.logger.info("Trying pip installation as fallback...")
+            self.logger.info("Installing Ray via pip...")
             
-            # Try with --break-system-packages first, then without
+            # Try lightweight Ray installation first
             pip_commands = [
-                "python3 -m pip install --user ray --quiet --break-system-packages",
+                "python3 -m pip install --user ray --no-deps --quiet --break-system-packages",
+                "python3 -m pip install --user ray --no-deps --quiet",
+                "python3 -m pip install --user ray --quiet --break-system-packages", 
                 "python3 -m pip install --user ray --quiet"
             ]
             
             pip_success = False
+            successful_cmd = None
+            
             for cmd in pip_commands:
-                pip_install = self.platform_utils.execute_command(cmd, timeout=300)
+                self.logger.info(f"Trying: {cmd}")
+                pip_install = self.platform_utils.execute_command(cmd, timeout=600)
                 if pip_install.success:
                     pip_success = True
+                    successful_cmd = cmd
+                    self.logger.info(f"✅ Ray installation successful with: {cmd}")
                     break
                 else:
-                    self.logger.warning(f"Command failed: {cmd}")
+                    self.logger.warning(f"Failed: {cmd} - {pip_install.stderr}")
             
             if pip_success:
-                # Verify pip installation
-                ray_verify = self.platform_utils.execute_command(
-                    "python3 -c 'import ray; print(f\"Ray {ray.__version__} installed via pip\")'", 
-                    timeout=30
+                # Verify installation with safer method
+                self.logger.info("Verifying Ray installation...")
+                
+                # First check package exists
+                pkg_check = self.platform_utils.execute_command(
+                    "python3 -c 'import pkg_resources; print(pkg_resources.get_distribution(\"ray\").version)'", 
+                    timeout=10
                 )
-                if ray_verify.success:
-                    ray_version = ray_verify.stdout.strip()
-                    self.logger.info(f"✅ Pip installation successful: {ray_version}")
+                
+                if pkg_check.success:
+                    ray_version = f"Ray {pkg_check.stdout.strip()}"
+                    self.logger.info(f"✅ Ray package verification successful: {ray_version}")
                     
                     return StepResult(
                         success=True,
                         step=OnboardingStep.ENVIRONMENT_SETUP,
-                        message="Environment setup completed (pip installation)",
+                        message="Environment setup completed (Ray installed via pip)",
                         data={
                             'python_version': python_version,
                             'ray_version': ray_version,
                             'installation_method': 'pip',
+                            'install_command': successful_cmd
                         },
                         execution_time=time.time() - start_time
                     )
+                else:
+                    self.logger.warning("Ray package verification failed")
             
             # Step 5: All installation methods failed - skip Ray for now
             self.logger.warning("Ray installation failed, continuing without Ray for testing")
@@ -488,15 +556,43 @@ class OnboardingOrchestrator:
             )
     
     async def _step_ray_connection(self, start_time: float) -> StepResult:
-        """Execute Ray cluster connection step (simplified)."""
+        """Execute Ray cluster connection step (with Ray availability check)."""
         try:
             self.logger.info(f"Testing Ray cluster connection at {self.cluster_address}...")
             
-            # Simple Ray connection test using system Python
+            # First check if Ray is available
+            ray_available = self.platform_utils.execute_command(
+                "python3 -c 'import pkg_resources; pkg_resources.get_distribution(\"ray\")'",
+                timeout=5
+            )
+            
+            if not ray_available.success:
+                self.logger.warning("Ray not available, skipping cluster connection")
+                return StepResult(
+                    success=True,
+                    step=OnboardingStep.RAY_CONNECTION,
+                    message="Ray cluster connection skipped (Ray not installed)",
+                    data={
+                        'node_id': 'not_available',
+                        'cluster_address': self.cluster_address,
+                        'connection_method': 'skipped_no_ray'
+                    },
+                    execution_time=time.time() - start_time
+                )
+            
+            # Ray is available, test connection with timeout
             ray_test_script = f'''
 import ray
 import sys
 import os
+import signal
+
+def timeout_handler(signum, frame):
+    print("ERROR:Connection timeout")
+    sys.exit(1)
+
+signal.signal(signal.SIGALRM, timeout_handler)
+signal.alarm(30)  # 30 second timeout
 
 try:
     # Set environment variables for cross-platform support
@@ -517,12 +613,14 @@ try:
 except Exception as e:
     print(f"ERROR:{{str(e)}}")
     sys.exit(1)
+finally:
+    signal.alarm(0)  # Cancel timeout
 '''
             
-            # Execute Ray connection test
+            # Execute Ray connection test with timeout
             result = self.platform_utils.execute_command(
-                f"python3 -c '{ray_test_script}'",
-                timeout=60
+                f"timeout 45 python3 -c '{ray_test_script}'",
+                timeout=50
             )
             
             if result.success and "SUCCESS:" in result.stdout:

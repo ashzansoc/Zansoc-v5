@@ -412,6 +412,24 @@ This tool will automatically set up your device as a ZanSoc compute provider.
 
 def main():
     """Main entry point for seamless CLI."""
+    import sys
+    
+    # Check for debug command
+    if len(sys.argv) > 1 and sys.argv[1] == 'debug':
+        from .debug_utils import create_debug_report, save_debug_report
+        console = Console()
+        
+        if '--save' in sys.argv or '-s' in sys.argv:
+            with console.status("[bold green]Collecting debug information..."):
+                filepath = save_debug_report()
+            console.print(f"[green]Debug report saved to: {filepath}")
+        else:
+            with console.status("[bold green]Collecting debug information..."):
+                report = create_debug_report()
+            console.print(report)
+        return
+    
+    # Normal onboarding flow
     cli = SeamlessCLI()
     cli.run()
 
