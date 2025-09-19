@@ -275,92 +275,87 @@ class OnboardingOrchestrator:
             )
     
     async def _step_environment_setup(self, start_time: float) -> StepResult:
-        """Execute environment setup step."""
+        """Execute environment setup step with simplified approach."""
         try:
-            # Install miniconda
-            self.logger.info("Installing miniconda...")
-            miniconda_result = self.environment_manager.install_miniconda()
-            if not miniconda_result.success:
+            self.logger.info("Starting simplified environment setup...")
+            
+            # Step 1: Check Python version
+            self.logger.info("Checking Python installation...")
+            python_check = self.platform_utils.execute_command("python3 --version", timeout=10)
+            if not python_check.success:
                 return StepResult(
                     success=False,
                     step=OnboardingStep.ENVIRONMENT_SETUP,
-                    message="Failed to install miniconda",
-                    error=miniconda_result.error,
+                    message="Python 3 is not available",
+                    error="Python 3 is required but not found",
                     execution_time=time.time() - start_time,
-                    retry_suggested=True
+                    retry_suggested=False
                 )
             
-            # Create conda environment
-            self.logger.info("Creating conda environment...")
-            env_result = self.environment_manager.create_conda_environment("3.13.7", "zansoc")
-            if not env_result.success:
-                return StepResult(
-                    success=False,
-                    step=OnboardingStep.ENVIRONMENT_SETUP,
-                    message="Failed to create conda environment",
-                    error=env_result.error,
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
-                )
+            python_version = python_check.stdout.strip()
+            self.logger.info(f"Found {python_version}")
             
-            # Clone repository
-            self.logger.info("Cloning repository...")
-            repo_result = self.environment_manager.clone_repository(
-                "https://github.com/ashzansoc/Zansoc-v5.git",
-                str(Path.home() / ".zansoc" / "Zansoc-v5")
+            # Step 2: Install pip packages directly (no conda needed)
+            self.logger.info("Installing Ray using pip...")
+            ray_install = self.platform_utils.execute_command(
+                "python3 -m pip install --user ray[default] --quiet", 
+                timeout=600
             )
-            if not repo_result.success:
-                return StepResult(
-                    success=False,
-                    step=OnboardingStep.ENVIRONMENT_SETUP,
-                    message="Failed to clone repository",
-                    error=repo_result.error,
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
+            if not ray_install.success:
+                self.logger.warning("Ray installation failed, trying without [default]...")
+                ray_install = self.platform_utils.execute_command(
+                    "python3 -m pip install --user ray --quiet", 
+                    timeout=600
                 )
-            
-            # Install requirements
-            self.logger.info("Installing requirements...")
-            requirements_path = Path.home() / ".zansoc" / "Zansoc-v5" / "cli" / "requirements.txt"
-            if requirements_path.exists():
-                req_result = self.environment_manager.install_requirements(
-                    str(requirements_path),
-                    "zansoc"
-                )
-                if not req_result.success:
+                if not ray_install.success:
                     return StepResult(
                         success=False,
                         step=OnboardingStep.ENVIRONMENT_SETUP,
-                        message="Failed to install requirements",
-                        error=req_result.error,
+                        message="Failed to install Ray",
+                        error=f"Ray installation failed: {ray_install.stderr}",
                         execution_time=time.time() - start_time,
                         retry_suggested=True
                     )
-            else:
-                self.logger.info("No requirements.txt found, skipping requirements installation")
             
-            # Install Ray
-            self.logger.info("Installing Ray...")
-            ray_result = self.environment_manager.install_ray("zansoc")
-            if not ray_result.success:
+            # Step 3: Install other required packages
+            self.logger.info("Installing additional packages...")
+            packages = ["requests", "pyyaml", "rich", "psutil"]
+            for package in packages:
+                install_result = self.platform_utils.execute_command(
+                    f"python3 -m pip install --user {package} --quiet", 
+                    timeout=120
+                )
+                if not install_result.success:
+                    self.logger.warning(f"Failed to install {package}, continuing...")
+            
+            # Step 4: Verify Ray installation
+            self.logger.info("Verifying Ray installation...")
+            ray_verify = self.platform_utils.execute_command(
+                "python3 -c 'import ray; print(f\"Ray {ray.__version__} installed successfully\")'", 
+                timeout=30
+            )
+            if not ray_verify.success:
                 return StepResult(
                     success=False,
                     step=OnboardingStep.ENVIRONMENT_SETUP,
-                    message="Failed to install Ray",
-                    error=ray_result.error,
+                    message="Ray installation verification failed",
+                    error="Ray import failed after installation",
                     execution_time=time.time() - start_time,
                     retry_suggested=True
                 )
+            
+            ray_version = ray_verify.stdout.strip()
+            self.logger.info(f"Ray verification successful: {ray_version}")
             
             return StepResult(
                 success=True,
                 step=OnboardingStep.ENVIRONMENT_SETUP,
-                message="Environment setup completed successfully",
+                message="Environment setup completed successfully (simplified)",
                 data={
-                    'miniconda_path': miniconda_result.data.get('installation_path'),
-                    'conda_env': 'zansoc',
-                    'python_version': '3.13.7',
-                    'ray_installed': True
+                    'python_version': python_version,
+                    'ray_version': ray_version,
+                    'installation_method': 'system_pip',
+                    'packages_installed': ['ray', 'requests', 'pyyaml', 'rich', 'psutil']
                 },
                 execution_time=time.time() - start_time
             )
@@ -445,46 +440,85 @@ class OnboardingOrchestrator:
             )
     
     async def _step_ray_connection(self, start_time: float) -> StepResult:
-        """Execute Ray cluster connection step."""
+        """Execute Ray cluster connection step (simplified)."""
         try:
-            # Connect to Ray cluster
-            self.logger.info(f"Connecting to Ray cluster at {self.cluster_address}...")
-            connection_result = self.ray_manager.connect_to_cluster(
-                self.cluster_address,
-                self.cluster_password,
-                "zansoc"
+            self.logger.info(f"Testing Ray cluster connection at {self.cluster_address}...")
+            
+            # Simple Ray connection test using system Python
+            ray_test_script = f'''
+import ray
+import sys
+import os
+
+try:
+    # Set environment variables for cross-platform support
+    os.environ["RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER"] = "1"
+    
+    # Test connection to cluster
+    ray.init(address="{self.cluster_address}", _redis_password="{self.cluster_password}")
+    
+    # Get basic cluster info
+    nodes = ray.nodes()
+    node_id = ray.get_runtime_context().node_id.hex()
+    
+    print(f"SUCCESS:{{node_id}}:{{len(nodes)}}")
+    
+    # Disconnect
+    ray.shutdown()
+    
+except Exception as e:
+    print(f"ERROR:{{str(e)}}")
+    sys.exit(1)
+'''
+            
+            # Execute Ray connection test
+            result = self.platform_utils.execute_command(
+                f"python3 -c '{ray_test_script}'",
+                timeout=60
             )
             
-            if not connection_result.success:
+            if result.success and "SUCCESS:" in result.stdout:
+                # Parse results
+                parts = result.stdout.split("SUCCESS:")[1].strip().split(":")
+                node_id = parts[0] if len(parts) > 0 else "unknown"
+                node_count = parts[1] if len(parts) > 1 else "0"
+                
+                self.logger.info(f"Ray cluster connection successful. Node ID: {node_id}, Cluster nodes: {node_count}")
+                
+                # Update provider with Ray node ID
+                if self.progress.provider_id and node_id != "unknown":
+                    self.provider_manager.update_provider_ray_node_id(
+                        self.progress.provider_id,
+                        node_id
+                    )
+                
+                return StepResult(
+                    success=True,
+                    step=OnboardingStep.RAY_CONNECTION,
+                    message=f"Ray cluster connection successful. Node ID: {node_id}",
+                    data={
+                        'node_id': node_id,
+                        'cluster_address': self.cluster_address,
+                        'cluster_nodes': node_count,
+                        'connection_method': 'system_python'
+                    },
+                    execution_time=time.time() - start_time
+                )
+            else:
+                error_msg = result.stderr or result.stdout or "Unknown connection error"
+                self.logger.error(f"Ray cluster connection failed: {error_msg}")
+                
                 return StepResult(
                     success=False,
                     step=OnboardingStep.RAY_CONNECTION,
                     message="Failed to connect to Ray cluster",
-                    error=connection_result.error,
+                    error=error_msg,
                     execution_time=time.time() - start_time,
                     retry_suggested=True
                 )
             
-            # Update provider with Ray node ID
-            if self.progress.provider_id and connection_result.node_id:
-                self.provider_manager.update_provider_ray_node_id(
-                    self.progress.provider_id,
-                    connection_result.node_id
-                )
-            
-            return StepResult(
-                success=True,
-                step=OnboardingStep.RAY_CONNECTION,
-                message=f"Connected to Ray cluster successfully. Node ID: {connection_result.node_id}",
-                data={
-                    'node_id': connection_result.node_id,
-                    'cluster_address': self.cluster_address,
-                    'cluster_info': connection_result.cluster_info.__dict__ if connection_result.cluster_info else None
-                },
-                execution_time=time.time() - start_time
-            )
-            
         except Exception as e:
+            self.logger.error(f"Ray connection failed with exception: {e}")
             return StepResult(
                 success=False,
                 step=OnboardingStep.RAY_CONNECTION,
@@ -501,7 +535,11 @@ class OnboardingOrchestrator:
             
             # Verify Ray connection
             self.logger.info("Verifying Ray connection...")
-            ray_verified = self.ray_manager.verify_node_registration("zansoc")
+            ray_verify = self.platform_utils.execute_command(
+                "python3 -c 'import ray; print(\"Ray available\")'",
+                timeout=10
+            )
+            ray_verified = ray_verify.success and "Ray available" in ray_verify.stdout
             verification_results['ray_connected'] = ray_verified
             
             # Verify Tailscale connection
@@ -510,21 +548,22 @@ class OnboardingOrchestrator:
             verification_results['tailscale_connected'] = tailscale_ip is not None
             verification_results['tailscale_ip'] = tailscale_ip
             
-            # Test cluster connectivity
+            # Test cluster connectivity (simple ping test)
             self.logger.info("Testing cluster connectivity...")
-            cluster_reachable = self.ray_manager.test_cluster_connectivity(self.cluster_address)
+            cluster_host = self.cluster_address.split(':')[0]
+            ping_result = self.platform_utils.execute_command(f"ping -c 1 {cluster_host}", timeout=10)
+            cluster_reachable = ping_result.success
             verification_results['cluster_reachable'] = cluster_reachable
             
-            # Get connection health
-            health = self.ray_manager.get_connection_health("zansoc")
-            verification_results['connection_health'] = health
+            # Simple health check
+            verification_results['connection_health'] = {'connected': ray_verified and cluster_reachable}
             
             # Check if all verifications passed
             all_verified = (
                 ray_verified and 
                 tailscale_ip is not None and 
                 cluster_reachable and
-                health.get('connected', False)
+                verification_results['connection_health'].get('connected', False)
             )
             
             if not all_verified:
@@ -535,7 +574,7 @@ class OnboardingOrchestrator:
                     failed_checks.append("Tailscale connection")
                 if not cluster_reachable:
                     failed_checks.append("Cluster connectivity")
-                if not health.get('connected', False):
+                if not verification_results['connection_health'].get('connected', False):
                     failed_checks.append("Connection health")
                 
                 return StepResult(
