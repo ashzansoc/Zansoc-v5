@@ -201,33 +201,54 @@ setup_repository() {
     log_success "Repository downloaded and extracted successfully"
 }
 
-# Create Python virtual environment
+# Create Python virtual environment (with fallback to user install)
 create_venv() {
-    log_info "Creating Python virtual environment..."
+    log_info "Setting up Python environment..."
     
-    if [ -d "$VENV_DIR" ]; then
-        log_info "Virtual environment exists, recreating..."
-        rm -rf "$VENV_DIR"
+    # Try to create virtual environment
+    if python3 -m venv --help >/dev/null 2>&1; then
+        if [ -d "$VENV_DIR" ]; then
+            log_info "Virtual environment exists, recreating..."
+            rm -rf "$VENV_DIR"
+        fi
+        
+        if python3 -m venv "$VENV_DIR" 2>/dev/null; then
+            source "$VENV_DIR/bin/activate"
+            pip install --upgrade pip
+            log_success "Virtual environment created"
+            return 0
+        else
+            log_warning "Virtual environment creation failed, using user install mode"
+        fi
+    else
+        log_warning "Virtual environment not available, using user install mode"
     fi
     
-    python3 -m venv "$VENV_DIR"
-    source "$VENV_DIR/bin/activate"
+    # Fallback: ensure pip is available for user installs
+    if ! python3 -m pip --version >/dev/null 2>&1; then
+        log_info "Bootstrapping pip..."
+        python3 -m ensurepip --upgrade --user 2>/dev/null || true
+    fi
     
-    # Upgrade pip
-    pip install --upgrade pip
-    
-    log_success "Virtual environment created"
+    # Create a flag file to indicate we're using user mode
+    touch "$ZANSOC_DIR/.user_mode"
+    log_success "Python environment ready (user install mode)"
 }
 
 # Install ZanSoc CLI
 install_cli() {
     log_info "Installing ZanSoc CLI..."
     
-    source "$VENV_DIR/bin/activate"
     cd "$ZANSOC_DIR/Zansoc-v5/cli"
     
-    # Install in development mode
-    pip install -e .
+    # Check if we're using virtual environment or user mode
+    if [ -f "$ZANSOC_DIR/.user_mode" ]; then
+        log_info "Installing in user mode..."
+        python3 -m pip install --user -e .
+    else
+        source "$VENV_DIR/bin/activate"
+        pip install -e .
+    fi
     
     log_success "ZanSoc CLI installed"
 }
@@ -238,9 +259,19 @@ create_launcher() {
     
     LAUNCHER_PATH="$ZANSOC_DIR/zansoc"
     
-    cat > "$LAUNCHER_PATH" << 'EOF'
+    # Create launcher based on installation mode
+    if [ -f "$ZANSOC_DIR/.user_mode" ]; then
+        cat > "$LAUNCHER_PATH" << 'EOF'
 #!/bin/bash
-# ZanSoc CLI Launcher
+# ZanSoc CLI Launcher (User Mode)
+
+# Run ZanSoc CLI with user-installed packages
+exec python3 -m zansoc_cli.seamless_cli "$@"
+EOF
+    else
+        cat > "$LAUNCHER_PATH" << 'EOF'
+#!/bin/bash
+# ZanSoc CLI Launcher (Virtual Environment)
 
 ZANSOC_DIR="$HOME/.zansoc"
 VENV_DIR="$ZANSOC_DIR/venv"
@@ -251,6 +282,7 @@ source "$VENV_DIR/bin/activate"
 # Run ZanSoc CLI
 exec python -m zansoc_cli.seamless_cli "$@"
 EOF
+    fi
     
     chmod +x "$LAUNCHER_PATH"
     
