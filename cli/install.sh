@@ -17,6 +17,7 @@ ZANSOC_DIR="$HOME/.zansoc"
 VENV_DIR="$ZANSOC_DIR/venv"
 ARCHIVE_URL="https://github.com/ashzansoc/Zansoc-v5/archive/refs/heads/main.zip"
 PYTHON_MIN_VERSION="3.9"
+PYTHON_TARGET_VERSION="3.13.7"
 
 # Logging
 log_info() {
@@ -84,6 +85,9 @@ check_python() {
         # Check if version is sufficient
         if python3 -c "import sys; exit(0 if sys.version_info >= (3, 9) else 1)"; then
             log_success "Python version is compatible"
+            if [[ "$PYTHON_VERSION" == "3.13"* ]]; then
+                log_success "Python 3.13 detected - optimal for ZanSoc"
+            fi
         else
             log_error "Python $PYTHON_MIN_VERSION or higher is required"
             log_error "Please install a newer version of Python"
@@ -111,6 +115,18 @@ check_dependencies() {
     # Check for unzip (needed for archive extraction)
     if ! command -v unzip >/dev/null 2>&1; then
         MISSING_DEPS+=("unzip")
+    fi
+    
+    # Check for python3-venv (needed for virtual environments)
+    if ! python3 -m venv --help >/dev/null 2>&1; then
+        # Detect Python version for venv package
+        PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+        MISSING_DEPS+=("python${PYTHON_VERSION}-venv")
+    fi
+    
+    # Check for pip
+    if ! python3 -m pip --version >/dev/null 2>&1; then
+        MISSING_DEPS+=("python3-pip")
     fi
     
     if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
