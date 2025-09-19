@@ -374,14 +374,26 @@ EOF
 verify_installation() {
     log_info "Verifying installation..."
     
-    source "$VENV_DIR/bin/activate"
-    
-    if python -c "import zansoc_cli; print('ZanSoc CLI imported successfully')" 2>/dev/null; then
-        log_success "Installation verified successfully"
-        return 0
+    # Check if we're using virtual environment or user mode
+    if [ -f "$ZANSOC_DIR/.user_mode" ]; then
+        # User mode - test with system python
+        if python3 -c "import zansoc_cli; print('ZanSoc CLI imported successfully')" 2>/dev/null; then
+            log_success "Installation verified successfully (user mode)"
+            return 0
+        else
+            log_error "Installation verification failed (user mode)"
+            return 1
+        fi
     else
-        log_error "Installation verification failed"
-        return 1
+        # Virtual environment mode
+        source "$VENV_DIR/bin/activate"
+        if python -c "import zansoc_cli; print('ZanSoc CLI imported successfully')" 2>/dev/null; then
+            log_success "Installation verified successfully (virtual environment)"
+            return 0
+        else
+            log_error "Installation verification failed (virtual environment)"
+            return 1
+        fi
     fi
 }
 
