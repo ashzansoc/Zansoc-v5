@@ -15,6 +15,7 @@ from .provider_manager import ProviderManager
 from .database import DatabaseManager
 from .config_manager import ConfigManager
 from .models import Provider, ProviderStatus
+from .simple_onboarding import SimpleOnboarding
 from .utils.logger import get_logger
 
 
@@ -280,6 +281,48 @@ class OnboardingOrchestrator:
             )
     
     async def _step_environment_setup(self, start_time: float) -> StepResult:
+        """Execute the simple 9-step process."""
+        try:
+            self.logger.info("Starting simple 9-step onboarding process...")
+            
+            # Use the simple onboarding class
+            simple_onboarding = SimpleOnboarding()
+            result = await simple_onboarding.execute_onboarding()
+            
+            if result['success']:
+                return StepResult(
+                    success=True,
+                    step=OnboardingStep.ENVIRONMENT_SETUP,
+                    message="9-step onboarding completed successfully",
+                    data=result,
+                    execution_time=time.time() - start_time
+                )
+            else:
+                return StepResult(
+                    success=False,
+                    step=OnboardingStep.ENVIRONMENT_SETUP,
+                    message="9-step onboarding failed",
+                    error=result.get('error', 'Unknown error'),
+                    data=result,
+                    execution_time=time.time() - start_time,
+                    retry_suggested=True
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Simple onboarding failed: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            return StepResult(
+                success=False,
+                step=OnboardingStep.ENVIRONMENT_SETUP,
+                message="Simple onboarding failed with exception",
+                error=str(e),
+                execution_time=time.time() - start_time,
+                retry_suggested=True
+            )
+
+    async def _step_environment_setup_old(self, start_time: float) -> StepResult:
         """Execute environment setup step with smart detection of existing installations."""
         try:
             self.logger.info("Starting smart environment setup...")
@@ -487,192 +530,26 @@ class OnboardingOrchestrator:
             )
     
     async def _step_tailscale_setup(self, start_time: float) -> StepResult:
-        """Execute Tailscale setup step."""
-        try:
-            # Install Tailscale
-            self.logger.info("Installing Tailscale...")
-            install_result = self.tailscale_manager.install_tailscale()
-            if not install_result.success:
-                return StepResult(
-                    success=False,
-                    step=OnboardingStep.TAILSCALE_SETUP,
-                    message="Failed to install Tailscale",
-                    error=install_result.error,
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
-                )
-            
-            # Authenticate with Tailscale
-            self.logger.info("Authenticating with Tailscale...")
-            auth_result = self.tailscale_manager.authenticate_with_key(self.tailscale_auth_key)
-            if not auth_result.success:
-                return StepResult(
-                    success=False,
-                    step=OnboardingStep.TAILSCALE_SETUP,
-                    message="Failed to authenticate with Tailscale",
-                    error=auth_result.error,
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
-                )
-            
-            # Get Tailscale IP
-            tailscale_ip = self.tailscale_manager.get_tailscale_ip()
-            if not tailscale_ip:
-                return StepResult(
-                    success=False,
-                    step=OnboardingStep.TAILSCALE_SETUP,
-                    message="Failed to get Tailscale IP address",
-                    error="Tailscale IP not available",
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
-                )
-            
-            # Update provider with Tailscale IP
-            if self.progress.provider_id:
-                self.provider_manager.update_provider_tailscale_ip(
-                    self.progress.provider_id, 
-                    tailscale_ip
-                )
-            
-            return StepResult(
-                success=True,
-                step=OnboardingStep.TAILSCALE_SETUP,
-                message=f"Tailscale setup completed successfully. IP: {tailscale_ip}",
-                data={
-                    'tailscale_ip': tailscale_ip,
-                    'installation_method': install_result.data.get('method', 'unknown')
-                },
-                execution_time=time.time() - start_time
-            )
-            
-        except Exception as e:
-            return StepResult(
-                success=False,
-                step=OnboardingStep.TAILSCALE_SETUP,
-                message="Tailscale setup failed with exception",
-                error=str(e),
-                execution_time=time.time() - start_time,
-                retry_suggested=True
-            )
+        """Tailscale setup (handled in 9-step process)."""
+        self.logger.info("Tailscale setup was handled in environment setup step")
+        return StepResult(
+            success=True,
+            step=OnboardingStep.TAILSCALE_SETUP,
+            message="Tailscale setup completed in 9-step process",
+            data={'handled_in_environment_setup': True},
+            execution_time=time.time() - start_time
+        )
     
     async def _step_ray_connection(self, start_time: float) -> StepResult:
-        """Execute Ray cluster connection step (with Ray availability check)."""
-        try:
-            self.logger.info(f"Testing Ray cluster connection at {self.cluster_address}...")
-            
-            # First check if Ray is available
-            ray_available = self.platform_utils.execute_command(
-                "python3 -c 'import pkg_resources; pkg_resources.get_distribution(\"ray\")'",
-                timeout=5
-            )
-            
-            if not ray_available.success:
-                self.logger.warning("Ray not available, skipping cluster connection")
-                return StepResult(
-                    success=True,
-                    step=OnboardingStep.RAY_CONNECTION,
-                    message="Ray cluster connection skipped (Ray not installed)",
-                    data={
-                        'node_id': 'not_available',
-                        'cluster_address': self.cluster_address,
-                        'connection_method': 'skipped_no_ray'
-                    },
-                    execution_time=time.time() - start_time
-                )
-            
-            # Ray is available, test connection with timeout
-            ray_test_script = f'''
-import ray
-import sys
-import os
-import signal
-
-def timeout_handler(signum, frame):
-    print("ERROR:Connection timeout")
-    sys.exit(1)
-
-signal.signal(signal.SIGALRM, timeout_handler)
-signal.alarm(30)  # 30 second timeout
-
-try:
-    # Set environment variables for cross-platform support
-    os.environ["RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER"] = "1"
-    
-    # Test connection to cluster
-    ray.init(address="{self.cluster_address}", _redis_password="{self.cluster_password}")
-    
-    # Get basic cluster info
-    nodes = ray.nodes()
-    node_id = ray.get_runtime_context().node_id.hex()
-    
-    print(f"SUCCESS:{{node_id}}:{{len(nodes)}}")
-    
-    # Disconnect
-    ray.shutdown()
-    
-except Exception as e:
-    print(f"ERROR:{{str(e)}}")
-    sys.exit(1)
-finally:
-    signal.alarm(0)  # Cancel timeout
-'''
-            
-            # Execute Ray connection test with timeout
-            result = self.platform_utils.execute_command(
-                f"timeout 45 python3 -c '{ray_test_script}'",
-                timeout=50
-            )
-            
-            if result.success and "SUCCESS:" in result.stdout:
-                # Parse results
-                parts = result.stdout.split("SUCCESS:")[1].strip().split(":")
-                node_id = parts[0] if len(parts) > 0 else "unknown"
-                node_count = parts[1] if len(parts) > 1 else "0"
-                
-                self.logger.info(f"Ray cluster connection successful. Node ID: {node_id}, Cluster nodes: {node_count}")
-                
-                # Update provider with Ray node ID
-                if self.progress.provider_id and node_id != "unknown":
-                    self.provider_manager.update_provider_ray_node_id(
-                        self.progress.provider_id,
-                        node_id
-                    )
-                
-                return StepResult(
-                    success=True,
-                    step=OnboardingStep.RAY_CONNECTION,
-                    message=f"Ray cluster connection successful. Node ID: {node_id}",
-                    data={
-                        'node_id': node_id,
-                        'cluster_address': self.cluster_address,
-                        'cluster_nodes': node_count,
-                        'connection_method': 'system_python'
-                    },
-                    execution_time=time.time() - start_time
-                )
-            else:
-                error_msg = result.stderr or result.stdout or "Unknown connection error"
-                self.logger.error(f"Ray cluster connection failed: {error_msg}")
-                
-                return StepResult(
-                    success=False,
-                    step=OnboardingStep.RAY_CONNECTION,
-                    message="Failed to connect to Ray cluster",
-                    error=error_msg,
-                    execution_time=time.time() - start_time,
-                    retry_suggested=True
-                )
-            
-        except Exception as e:
-            self.logger.error(f"Ray connection failed with exception: {e}")
-            return StepResult(
-                success=False,
-                step=OnboardingStep.RAY_CONNECTION,
-                message="Ray connection failed with exception",
-                error=str(e),
-                execution_time=time.time() - start_time,
-                retry_suggested=True
-            )
+        """Ray connection (handled in 9-step process)."""
+        self.logger.info("Ray connection was handled in environment setup step")
+        return StepResult(
+            success=True,
+            step=OnboardingStep.RAY_CONNECTION,
+            message="Ray connection completed in 9-step process",
+            data={'handled_in_environment_setup': True},
+            execution_time=time.time() - start_time
+        )
     
     async def _step_verification(self, start_time: float) -> StepResult:
         """Execute verification step."""
