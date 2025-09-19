@@ -399,4 +399,90 @@ class ProviderManager:
             
         except Exception as e:
             self.logger.error(f"Error marking step failed in session {session_id}: {e}")
+            return False   
+ 
+    def update_provider_tailscale_ip(self, provider_id: str, tailscale_ip: str) -> bool:
+        """Update provider's Tailscale IP address.
+        
+        Args:
+            provider_id: Provider UUID
+            tailscale_ip: Tailscale IP address
+            
+        Returns:
+            bool: True if successful
+        """
+        try:
+            updates = {
+                'tailscale_ip': tailscale_ip,
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            success = self.db.update_provider(provider_id, updates)
+            
+            if success:
+                self.logger.info(f"Updated Tailscale IP for provider {provider_id}")
+            else:
+                self.logger.error(f"Failed to update Tailscale IP for provider {provider_id}")
+            
+            return success
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to update Tailscale IP: {e}")
+            return False
+    
+    def update_provider_ray_node_id(self, provider_id: str, node_id: str) -> bool:
+        """Update provider's Ray node ID.
+        
+        Args:
+            provider_id: Provider UUID
+            node_id: Ray node ID
+            
+        Returns:
+            bool: True if successful
+        """
+        try:
+            updates = {
+                'ray_node_id': node_id,
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            success = self.db.update_provider(provider_id, updates)
+            
+            if success:
+                self.logger.info(f"Updated Ray node ID for provider {provider_id}")
+            else:
+                self.logger.error(f"Failed to update Ray node ID for provider {provider_id}")
+            
+            return success
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to update Ray node ID: {e}")
+            return False
+    
+    def complete_onboarding_session(self, session_id: str) -> bool:
+        """Complete an onboarding session.
+        
+        Args:
+            session_id: Session UUID
+            
+        Returns:
+            bool: True if successful
+        """
+        try:
+            updates = {
+                'status': 'completed',
+                'completed_at': datetime.now().isoformat()
+            }
+            
+            success = self.db.update_session(session_id, updates)
+            
+            if success:
+                self.logger.info(f"Completed onboarding session {session_id}")
+            else:
+                self.logger.error(f"Failed to complete onboarding session {session_id}")
+            
+            return success
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to complete onboarding session: {e}")
             return False
