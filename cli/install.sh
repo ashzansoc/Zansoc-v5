@@ -74,7 +74,7 @@ check_os() {
     fi
 }
 
-# Check Python version
+# Check Python version and ensure pip is available
 check_python() {
     log_info "Checking Python installation..."
     
@@ -97,7 +97,16 @@ check_python() {
         log_error "Python 3 is not installed"
         log_info "Installing Python 3..."
         sudo apt update
-        sudo apt install -y python3 python3-pip python3-venv
+        sudo apt install -y python3
+    fi
+    
+    # Ensure pip is available
+    log_info "Checking pip availability..."
+    if ! python3 -m pip --version >/dev/null 2>&1; then
+        log_info "Pip not found, installing..."
+        install_pip_manually
+    else
+        log_success "Pip is available"
     fi
 }
 
@@ -123,10 +132,7 @@ check_dependencies() {
         MISSING_DEPS+=("python3-venv")
     fi
     
-    # Check for pip
-    if ! python3 -m pip --version >/dev/null 2>&1; then
-        MISSING_DEPS+=("python3-pip")
-    fi
+    # Note: We'll handle pip installation separately since package manager might not work
     
     if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         log_warning "Missing dependencies: ${MISSING_DEPS[*]}"
@@ -137,6 +143,51 @@ check_dependencies() {
     else
         log_success "All dependencies are available"
     fi
+}
+
+# Install pip manually when package manager fails
+install_pip_manually() {
+    log_info "Installing pip manually..."
+    
+    # Create temporary directory
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+    
+    # Download get-pip.py
+    if command -v curl >/dev/null 2>&1; then
+        curl -s https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q https://bootstrap.pypa.io/get-pip.py -O get-pip.py
+    else
+        log_error "Neither curl nor wget available for downloading pip"
+        return 1
+    fi
+    
+    # Install pip in user mode
+    if python3 get-pip.py --user --quiet; then
+        log_success "Pip installed successfully"
+        
+        # Add ~/.local/bin to PATH if not already there
+        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+            export PATH="$HOME/.local/bin:$PATH"
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+            log_info "Added ~/.local/bin to PATH"
+        fi
+        
+        # Verify pip installation
+        if python3 -m pip --version >/dev/null 2>&1; then
+            log_success "Pip verification successful"
+        else
+            log_warning "Pip installed but not immediately available"
+        fi
+    else
+        log_error "Failed to install pip manually"
+        return 1
+    fi
+    
+    # Cleanup
+    cd /
+    rm -rf "$TEMP_DIR"
 }
 
 # Create ZanSoc directory structure
@@ -226,8 +277,8 @@ create_venv() {
     
     # Fallback: ensure pip is available for user installs
     if ! python3 -m pip --version >/dev/null 2>&1; then
-        log_info "Bootstrapping pip..."
-        python3 -m ensurepip --upgrade --user 2>/dev/null || true
+        log_info "Pip not found, installing pip manually..."
+        install_pip_manually
     fi
     
     # Create a flag file to indicate we're using user mode
