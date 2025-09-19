@@ -119,9 +119,8 @@ check_dependencies() {
     
     # Check for python3-venv (needed for virtual environments)
     if ! python3 -m venv --help >/dev/null 2>&1; then
-        # Detect Python version for venv package
-        PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-        MISSING_DEPS+=("python${PYTHON_VERSION}-venv")
+        # Try generic python3-venv first, then version-specific
+        MISSING_DEPS+=("python3-venv")
     fi
     
     # Check for pip
