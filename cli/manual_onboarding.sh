@@ -54,85 +54,27 @@ echo "⚠️ Skipping netifaces (build conflicts) and heavy ML packages for fast
 
 # Step 5: Install and configure Tailscale
 echo "🌐 Step 5: Setting up Tailscale..."
-curl -fsSL https://tailscale.com/install.sh | sh
+curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up --auth-key=tskey-auth-kgkS693KeP11CNTRL-mwvR4EG7SQS1NgU71X46RScka4Tk2BKtJ --advertise-exit-node
 
-echo "🔑 Generating ephemeral Tailscale auth key..."
-# Generate a new ephemeral auth key via API
-TAILSCALE_API_KEY="tskey-api-kd32Q6XdHS11CNTRL-X13DpHNm9ygqbdavCzngxgEJg91Rgie6"
-TAILNET="ashzansoc@gmail.com"
-
-# Create ephemeral auth key that expires in 1 hour
-AUTH_KEY_RESPONSE=$(curl -s -X POST \
-  "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/keys" \
-  -H "Authorization: Bearer ${TAILSCALE_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "capabilities": {
-      "devices": {
-        "create": {
-          "reusable": false,
-          "ephemeral": true,
-          "preauthorized": true,
-          "tags": ["tag:zansoc-worker"]
-        }
-      }
-    },
-    "expirySeconds": 3600,
-    "description": "ZanSoc onboarding - $(hostname) - $(date)"
-  }')
-
-# Extract the auth key from the response
-EPHEMERAL_AUTH_KEY=$(echo "$AUTH_KEY_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['key'])" 2>/dev/null)
-
-if [ -z "$EPHEMERAL_AUTH_KEY" ]; then
-    echo "❌ Failed to generate ephemeral auth key. Response:"
-    echo "$AUTH_KEY_RESPONSE"
-    echo "Falling back to manual authentication..."
-    echo "Please run: sudo tailscale up"
-    echo "Then follow the authentication URL in your browser"
-    read -p "Press Enter after completing Tailscale authentication..."
-else
-    echo "✅ Generated ephemeral auth key, connecting to Tailscale..."
-    # Set hostname to include ZanSoc identifier for easier admin tracking
-    HOSTNAME="zansoc-worker-$(hostname)"
-    sudo tailscale up --authkey="$EPHEMERAL_AUTH_KEY" --hostname="$HOSTNAME"
-    
-    echo "📋 Device registered as: $HOSTNAME"
-    echo "🔗 Admin can view at: https://login.tailscale.com/admin/machines"
-fi
-
-# Step 6: Get Tailscale IP and notify admin
-echo "📍 Step 5: Getting Tailscale IP..."
+# Step 6: Get Tailscale IP
+echo "📍 Step 6: Getting Tailscale IP..."
 TAILSCALE_IP=$(tailscale ip -4)
 echo "Your Tailscale IP: $TAILSCALE_IP"
 
-# Optional: Send notification to admin about new device
-echo "📢 Notifying admin about new ZanSoc worker..."
-DEVICE_INFO=$(curl -s -H "Authorization: Bearer ${TAILSCALE_API_KEY}" \
-  "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/devices" | \
-  python3 -c "
-import sys, json
-devices = json.load(sys.stdin)['devices']
-for device in devices:
-    if device.get('clientVersion', '').startswith('tailscale') and '$TAILSCALE_IP' in device.get('addresses', []):
-        print(f\"Device: {device.get('hostname', 'unknown')}, OS: {device.get('os', 'unknown')}, IP: $TAILSCALE_IP\")
-        break
-" 2>/dev/null)
-
-echo "✅ Device info: $DEVICE_INFO"
-
 # Step 7: Add Ray CLI to PATH
-echo "🔧 Step 6: Setting up Ray CLI..."
+echo ""
+echo "🔧 Step 7: Setting up Ray CLI..."
 export PATH="$HOME/.local/bin:$PATH"
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 # Step 8: Connect to Ray cluster
-echo "🚀 Step 7: Connecting to Ray cluster..."
+echo ""
+echo "🚀 Step 8: Connecting to Ray cluster..."
 export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1
 $HOME/.local/bin/ray start --address='100.101.84.71:6379'
 
 # Step 9: Verify connection
-echo "✅ Step 8: Verifying Ray connection..."
+echo "✅ Step 9: Verifying Ray connection..."
 sleep 3
 $HOME/.local/bin/ray status
 
