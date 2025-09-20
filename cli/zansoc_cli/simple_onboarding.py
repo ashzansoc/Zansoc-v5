@@ -260,33 +260,115 @@ class SimpleOnboarding:
             }
     
     async def _join_ray_cluster(self) -> Dict[str, Any]:
-        """Step 9: Join Ray cluster with the exact command that works manually."""
+        """Step 9: Join Ray cluster with detailed logging and verification."""
         # Use the exact command sequence that works manually
         ray_cmd = f'export PATH="$HOME/.local/bin:$PATH" && export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1 && ray start --address=\'{self.cluster_address}\' --redis-password=\'{self.cluster_password}\''
         
-        self.logger.info(f"Executing Ray cluster join: {ray_cmd}")
+        self.logger.info(f"🔍 Step 9 Details:")
+        self.logger.info(f"  Cluster Address: {self.cluster_address}")
+        self.logger.info(f"  Command: {ray_cmd}")
+        
+        # Test connectivity first
+        self.logger.info("🌐 Testing cluster connectivity...")
+        ping_cmd = f"ping -c 3 {self.cluster_address.split(':')[0]}"
+        ping_result = self.platform_utils.execute_command(ping_cmd, timeout=15)
+        self.logger.info(f"  Ping result: {'✅ Success' if ping_result.success else '❌ Failed'}")
+        if not ping_result.success:
+            self.logger.warning(f"  Ping output: {ping_result.stderr}")
+        
+        # Check Ray CLI availability
+        self.logger.info("🔧 Checking Ray CLI availability...")
+        ray_check_cmd = 'export PATH="$HOME/.local/bin:$PATH" && ray --version'
+        ray_check_result = self.platform_utils.execute_command(ray_check_cmd, timeout=10)
+        self.logger.info(f"  Ray CLI: {'✅ Available' if ray_check_result.success else '❌ Not found'}")
+        if ray_check_result.success:
+            self.logger.info(f"  Ray Version: {ray_check_result.stdout.strip()}")
+        
+        # Execute Ray cluster join
+        self.logger.info("⚡ Executing Ray cluster join...")
         result = self.platform_utils.execute_command(ray_cmd, timeout=120)
         
+        # Log detailed output
+        self.logger.info(f"  Command exit code: {result.return_code}")
+        if result.stdout:
+            self.logger.info(f"  STDOUT: {result.stdout}")
+        if result.stderr:
+            self.logger.info(f"  STDERR: {result.stderr}")
+        
         if result.success:
-            # Verify connection with proper PATH
+            self.logger.info("✅ Ray start command completed")
+            
+            # Wait a moment for connection to establish
+            import time
+            time.sleep(3)
+            
+            # Verify connection with multiple checks
+            self.logger.info("🔍 Verifying Ray connection...")
+            
+            # Check 1: Ray status
             verify_cmd = 'export PATH="$HOME/.local/bin:$PATH" && ray status'
             verify_result = self.platform_utils.execute_command(verify_cmd, timeout=30)
+            self.logger.info(f"  Ray status: {'✅ Success' if verify_result.success else '❌ Failed'}")
+            if verify_result.stdout:
+                self.logger.info(f"  Status output: {verify_result.stdout}")
+            if verify_result.stderr:
+                self.logger.info(f"  Status error: {verify_result.stderr}")
+            
+            # Check 2: Python Ray connection test
+            python_test_cmd = '''export PATH="$HOME/.local/bin:$PATH" && python3 -c "
+import ray
+import os
+try:
+    if ray.is_initialized():
+        print('Ray already initialized')
+        print('Cluster:', ray.get_runtime_context().gcs_address)
+        print('Node ID:', ray.get_runtime_context().node_id.hex())
+    else:
+        print('Ray not initialized - this is expected after ray start')
+        print('Ray processes should be running in background')
+except Exception as e:
+    print('Error:', e)
+"'''
+            python_result = self.platform_utils.execute_command(python_test_cmd, timeout=15)
+            self.logger.info(f"  Python test: {'✅ Success' if python_result.success else '❌ Failed'}")
+            if python_result.stdout:
+                self.logger.info(f"  Python output: {python_result.stdout}")
+            
+            # Check 3: Process check
+            process_cmd = "ps aux | grep -E '(ray|gcs|raylet)' | grep -v grep"
+            process_result = self.platform_utils.execute_command(process_cmd, timeout=10)
+            self.logger.info(f"  Ray processes: {'✅ Found' if process_result.success and process_result.stdout.strip() else '❌ None'}")
+            if process_result.stdout:
+                self.logger.info(f"  Processes: {process_result.stdout}")
             
             return {
                 'success': True,
                 'cluster_address': self.cluster_address,
                 'ray_command': ray_cmd,
-                'status': verify_result.stdout if verify_result.success else 'Connected but status unknown',
                 'connection_output': result.stdout,
-                'verification_output': verify_result.stdout if verify_result.success else verify_result.stderr
+                'verification_output': verify_result.stdout if verify_result.success else verify_result.stderr,
+                'python_test_output': python_result.stdout if python_result.success else python_result.stderr,
+                'processes_found': bool(process_result.stdout.strip()) if process_result.success else False,
+                'detailed_logs': {
+                    'ping_success': ping_result.success,
+                    'ray_cli_available': ray_check_result.success,
+                    'ray_start_success': result.success,
+                    'ray_status_success': verify_result.success,
+                    'python_test_success': python_result.success
+                }
             }
         else:
             # Log detailed error information
-            self.logger.error(f"Ray cluster join failed: {result.stderr}")
+            self.logger.error(f"❌ Ray cluster join failed")
+            self.logger.error(f"  Exit code: {result.return_code}")
+            self.logger.error(f"  STDERR: {result.stderr}")
+            self.logger.error(f"  STDOUT: {result.stdout}")
+            
             return {
                 'success': False,
                 'error': 'Ray cluster join failed',
                 'command': ray_cmd,
                 'details': result.stderr,
-                'stdout': result.stdout
+                'stdout': result.stdout,
+                'exit_code': result.return_code
             }
