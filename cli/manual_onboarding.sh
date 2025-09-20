@@ -66,7 +66,7 @@ AUTH_KEY_RESPONSE=$(curl -s -X POST \
       }
     },
     "expirySeconds": 3600,
-    "description": "ZanSoc onboarding - ephemeral key"
+    "description": "ZanSoc onboarding - $(hostname) - $(date)"
   }')
 
 # Extract the auth key from the response
@@ -81,13 +81,33 @@ if [ -z "$EPHEMERAL_AUTH_KEY" ]; then
     read -p "Press Enter after completing Tailscale authentication..."
 else
     echo "✅ Generated ephemeral auth key, connecting to Tailscale..."
-    sudo tailscale up --authkey="$EPHEMERAL_AUTH_KEY"
+    # Set hostname to include ZanSoc identifier for easier admin tracking
+    HOSTNAME="zansoc-worker-$(hostname)"
+    sudo tailscale up --authkey="$EPHEMERAL_AUTH_KEY" --hostname="$HOSTNAME"
+    
+    echo "📋 Device registered as: $HOSTNAME"
+    echo "🔗 Admin can view at: https://login.tailscale.com/admin/machines"
 fi
 
-# Step 5: Get Tailscale IP
+# Step 5: Get Tailscale IP and notify admin
 echo "📍 Step 5: Getting Tailscale IP..."
 TAILSCALE_IP=$(tailscale ip -4)
 echo "Your Tailscale IP: $TAILSCALE_IP"
+
+# Optional: Send notification to admin about new device
+echo "📢 Notifying admin about new ZanSoc worker..."
+DEVICE_INFO=$(curl -s -H "Authorization: Bearer ${TAILSCALE_API_KEY}" \
+  "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/devices" | \
+  python3 -c "
+import sys, json
+devices = json.load(sys.stdin)['devices']
+for device in devices:
+    if device.get('clientVersion', '').startswith('tailscale') and '$TAILSCALE_IP' in device.get('addresses', []):
+        print(f\"Device: {device.get('hostname', 'unknown')}, OS: {device.get('os', 'unknown')}, IP: $TAILSCALE_IP\")
+        break
+" 2>/dev/null)
+
+echo "✅ Device info: $DEVICE_INFO"
 
 # Step 6: Add Ray CLI to PATH
 echo "🔧 Step 6: Setting up Ray CLI..."
