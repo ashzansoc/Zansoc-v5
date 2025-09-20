@@ -43,7 +43,46 @@ echo "⚠️ Skipping netifaces (build conflicts) and heavy ML packages for fast
 # Step 5: Install and configure Tailscale
 echo "🌐 Step 5: Setting up Tailscale..."
 curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up --authkey=tskey-auth-kd32Q6XdHS11CNTRL-X13DpHNm9ygqbdavCzngxgEJg91Rgie6
+
+echo "🔑 Generating ephemeral Tailscale auth key..."
+# Generate a new ephemeral auth key via API
+TAILSCALE_API_KEY="tskey-api-kd32Q6XdHS11CNTRL-X13DpHNm9ygqbdavCzngxgEJg91Rgie6"
+TAILNET="ashzansoc@gmail.com"
+
+# Create ephemeral auth key that expires in 1 hour
+AUTH_KEY_RESPONSE=$(curl -s -X POST \
+  "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/keys" \
+  -H "Authorization: Bearer ${TAILSCALE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "capabilities": {
+      "devices": {
+        "create": {
+          "reusable": false,
+          "ephemeral": true,
+          "preauthorized": true,
+          "tags": ["tag:zansoc-worker"]
+        }
+      }
+    },
+    "expirySeconds": 3600,
+    "description": "ZanSoc onboarding - ephemeral key"
+  }')
+
+# Extract the auth key from the response
+EPHEMERAL_AUTH_KEY=$(echo "$AUTH_KEY_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['key'])" 2>/dev/null)
+
+if [ -z "$EPHEMERAL_AUTH_KEY" ]; then
+    echo "❌ Failed to generate ephemeral auth key. Response:"
+    echo "$AUTH_KEY_RESPONSE"
+    echo "Falling back to manual authentication..."
+    echo "Please run: sudo tailscale up"
+    echo "Then follow the authentication URL in your browser"
+    read -p "Press Enter after completing Tailscale authentication..."
+else
+    echo "✅ Generated ephemeral auth key, connecting to Tailscale..."
+    sudo tailscale up --authkey="$EPHEMERAL_AUTH_KEY"
+fi
 
 # Step 5: Get Tailscale IP
 echo "📍 Step 5: Getting Tailscale IP..."
