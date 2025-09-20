@@ -6,27 +6,39 @@ set -e
 echo "🚀 ZanSoc Manual Onboarding (ARM64 Optimized)"
 echo "=============================================="
 
-# Step 1: Clone repository
-echo "📦 Step 1: Cloning ZanSoc repository..."
+# Step 1: System updates and essential packages
+echo "🔄 Step 1: Updating system and installing essential packages..."
+sudo apt update && sudo apt upgrade -y
+echo "Installing essential packages: git, curl, python3-pip, python3-venv..."
+sudo apt install -y git curl python3-pip python3-venv python3-setuptools || echo "⚠️ Some packages failed, continuing..."
+
+# Ensure pip is available
+echo "🐍 Ensuring pip is available..."
+if ! python3 -m pip --version >/dev/null 2>&1; then
+    echo "Installing pip via get-pip.py..."
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py | python3 --break-system-packages
+fi
+
+# Step 2: Clone repository
+echo "📦 Step 2: Cloning ZanSoc repository..."
 cd ~
 rm -rf zansoc-beta
 git clone https://github.com/ashzansoc/Zansoc-v5.git zansoc-beta
 cd zansoc-beta
 
-# Step 2: Check Python version and install dependencies
-echo "🔧 Step 2: Checking Python version and installing dependencies..."
-sudo apt update
+# Step 3: Check Python version and install build dependencies
+echo "🔧 Step 3: Checking Python version and installing build dependencies..."
 echo "Current Python version: $(python3 --version)"
 echo "⚠️ Note: Cluster requires Python 3.13.7, you have $(python3 --version)"
 echo "Trying to install build dependencies..."
 sudo apt install -y build-essential || echo "⚠️ Build-essential installation failed, continuing..."
 # Try to install Python 3.13 specific dev packages
 sudo apt install -y python3.13-dev python3.13-venv || echo "⚠️ Python 3.13 dev packages not available, using pip fallback..."
-# Install setuptools via pip instead of apt
+# Install setuptools via pip
 python3 -m pip install --user setuptools wheel --break-system-packages || echo "⚠️ Setuptools installation failed, continuing..."
 
-# Step 3: Install Python packages (skip problematic netifaces)
-echo "📋 Step 3: Installing Python packages (skipping problematic packages)..."
+# Step 4: Install Python packages (skip problematic netifaces)
+echo "📋 Step 4: Installing Python packages (skipping problematic packages)..."
 # Use python3 -m pip instead of just pip
 echo "Installing Ray with exact version to match cluster..."
 python3 -m pip install "ray[default,data,train,tune,rllib]==2.49.1" --break-system-packages
@@ -89,7 +101,7 @@ else
     echo "🔗 Admin can view at: https://login.tailscale.com/admin/machines"
 fi
 
-# Step 5: Get Tailscale IP and notify admin
+# Step 6: Get Tailscale IP and notify admin
 echo "📍 Step 5: Getting Tailscale IP..."
 TAILSCALE_IP=$(tailscale ip -4)
 echo "Your Tailscale IP: $TAILSCALE_IP"
@@ -109,17 +121,17 @@ for device in devices:
 
 echo "✅ Device info: $DEVICE_INFO"
 
-# Step 6: Add Ray CLI to PATH
+# Step 7: Add Ray CLI to PATH
 echo "🔧 Step 6: Setting up Ray CLI..."
 export PATH="$HOME/.local/bin:$PATH"
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
-# Step 7: Connect to Ray cluster
+# Step 8: Connect to Ray cluster
 echo "🚀 Step 7: Connecting to Ray cluster..."
 export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1
 $HOME/.local/bin/ray start --address='100.101.84.71:6379'
 
-# Step 8: Verify connection
+# Step 9: Verify connection
 echo "✅ Step 8: Verifying Ray connection..."
 sleep 3
 $HOME/.local/bin/ray status
