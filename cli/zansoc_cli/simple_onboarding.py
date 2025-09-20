@@ -48,49 +48,55 @@ class SimpleOnboarding:
             self.logger.info("🔍 Step 4: Installing requirements.txt...")
             req_result = await self._install_requirements()
             results['step_4'] = req_result
+            if not req_result['success']:
+                self.logger.error(f"❌ Step 4 failed: {req_result.get('error', 'Unknown error')}")
+                return {'success': False, 'error': f"Step 4 failed: {req_result.get('error')}", 'step': 4, 'results': results}
             self.logger.info("✅ Step 4: Requirements installed")
             
             # Step 5: Double check if everything is installed
             self.logger.info("🔍 Step 5: Verifying installations...")
             verify_result = await self._verify_installations()
             results['step_5'] = verify_result
+            if not verify_result['success']:
+                self.logger.error(f"❌ Step 5 failed: {verify_result.get('error', 'Verification failed')}")
+                return {'success': False, 'error': f"Step 5 failed: {verify_result.get('error')}", 'step': 5, 'results': results}
             self.logger.info("✅ Step 5: Installations verified")
             
             # Step 6: Make sure Ray is installed in its full form
             self.logger.info("🔍 Step 6: Installing Ray in full form...")
             ray_result = await self._install_ray_full()
             results['step_6'] = ray_result
-            if ray_result['success']:
-                self.logger.info("✅ Step 6: Ray installed in full form")
-            else:
-                self.logger.warning("⚠️ Step 6: Ray installation had issues")
+            if not ray_result['success']:
+                self.logger.error(f"❌ Step 6 failed: {ray_result.get('error', 'Ray installation failed')}")
+                return {'success': False, 'error': f"Step 6 failed: {ray_result.get('error')}", 'step': 6, 'results': results}
+            self.logger.info("✅ Step 6: Ray installed in full form")
             
             # Step 7: Generate unique join request from Tailscale API
             self.logger.info("🔍 Step 7: Setting up Tailscale...")
             tailscale_result = await self._setup_tailscale()
             results['step_7'] = tailscale_result
-            if tailscale_result['success']:
-                self.logger.info("✅ Step 7: Tailscale configured")
-            else:
-                self.logger.warning("⚠️ Step 7: Tailscale setup had issues")
+            if not tailscale_result['success']:
+                self.logger.error(f"❌ Step 7 failed: {tailscale_result.get('error', 'Tailscale setup failed')}")
+                return {'success': False, 'error': f"Step 7 failed: {tailscale_result.get('error')}", 'step': 7, 'results': results}
+            self.logger.info("✅ Step 7: Tailscale configured")
             
             # Step 8: Make sure Ray is up and active
             self.logger.info("🔍 Step 8: Verifying Ray is active...")
             ray_active_result = await self._verify_ray_active()
             results['step_8'] = ray_active_result
-            if ray_active_result['success']:
-                self.logger.info("✅ Step 8: Ray is up and active")
-            else:
-                self.logger.warning("⚠️ Step 8: Ray activation issues")
+            if not ray_active_result['success']:
+                self.logger.error(f"❌ Step 8 failed: {ray_active_result.get('error', 'Ray verification failed')}")
+                return {'success': False, 'error': f"Step 8 failed: {ray_active_result.get('error')}", 'step': 8, 'results': results}
+            self.logger.info("✅ Step 8: Ray is up and active")
             
             # Step 9: Join Ray cluster
             self.logger.info("🔍 Step 9: Joining Ray cluster...")
             cluster_result = await self._join_ray_cluster()
             results['step_9'] = cluster_result
-            if cluster_result['success']:
-                self.logger.info("✅ Step 9: Successfully joined Ray cluster")
-            else:
-                self.logger.warning("⚠️ Step 9: Ray cluster join had issues")
+            if not cluster_result['success']:
+                self.logger.error(f"❌ Step 9 failed: {cluster_result.get('error', 'Ray cluster join failed')}")
+                return {'success': False, 'error': f"Step 9 failed: {cluster_result.get('error')}", 'step': 9, 'results': results}
+            self.logger.info("✅ Step 9: Successfully joined Ray cluster")
             
             total_time = time.time() - start_time
             self.logger.info(f"🎉 All 9 steps completed in {total_time:.1f}s")
@@ -131,19 +137,30 @@ class SimpleOnboarding:
         if not requirements_file.exists():
             return {'success': True, 'note': 'No requirements.txt found'}
         
+        self.logger.info(f"Installing requirements from {requirements_file}")
+        
         # Try with --break-system-packages first
         cmd = f"cd {zansoc_root} && python3 -m pip install --user -r requirements.txt --break-system-packages --quiet"
-        result = self.platform_utils.execute_command(cmd, timeout=300)
+        self.logger.info(f"Trying command: {cmd}")
+        result = self.platform_utils.execute_command(cmd, timeout=600)  # Increased timeout
         
         if not result.success:
+            self.logger.warning(f"First attempt failed: {result.stderr}")
             # Try without --break-system-packages
             cmd = f"cd {zansoc_root} && python3 -m pip install --user -r requirements.txt --quiet"
-            result = self.platform_utils.execute_command(cmd, timeout=300)
+            self.logger.info(f"Trying fallback command: {cmd}")
+            result = self.platform_utils.execute_command(cmd, timeout=600)
+        
+        if result.success:
+            self.logger.info("Requirements installation completed successfully")
+        else:
+            self.logger.error(f"Requirements installation failed: {result.stderr}")
         
         return {
             'success': result.success,
             'command': cmd,
-            'error': result.stderr if not result.success else None
+            'error': result.stderr if not result.success else None,
+            'stdout': result.stdout
         }
     
     async def _verify_installations(self) -> Dict[str, Any]:
@@ -175,19 +192,27 @@ class SimpleOnboarding:
             "python3 -m pip install --user 'ray[default]' --quiet"
         ]
         
-        for cmd in commands:
-            self.logger.info(f"Trying: {cmd}")
-            result = self.platform_utils.execute_command(cmd, timeout=600)
+        for i, cmd in enumerate(commands, 1):
+            self.logger.info(f"Ray installation attempt {i}/{len(commands)}: {cmd}")
+            result = self.platform_utils.execute_command(cmd, timeout=900)  # Increased timeout
+            
             if result.success:
+                self.logger.info("Ray installation completed successfully")
                 # Verify Ray CLI is accessible
                 path_check = self.platform_utils.execute_command("export PATH=\"$HOME/.local/bin:$PATH\" && which ray", timeout=10)
+                ray_version_check = self.platform_utils.execute_command("export PATH=\"$HOME/.local/bin:$PATH\" && ray --version", timeout=10)
+                
                 return {
                     'success': True,
                     'command': cmd,
                     'method': 'pip_install',
-                    'ray_cli_path': path_check.stdout.strip() if path_check.success else 'Not in PATH'
+                    'ray_cli_path': path_check.stdout.strip() if path_check.success else 'Not in PATH',
+                    'ray_version': ray_version_check.stdout.strip() if ray_version_check.success else 'Unknown'
                 }
+            else:
+                self.logger.warning(f"Ray installation attempt {i} failed: {result.stderr}")
         
+        self.logger.error("All Ray installation attempts failed")
         return {
             'success': False,
             'error': 'All Ray installation methods failed',
