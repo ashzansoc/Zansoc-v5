@@ -284,6 +284,16 @@ class SimpleOnboarding:
         if ray_check_result.success:
             self.logger.info(f"  Ray Version: {ray_check_result.stdout.strip()}")
         
+        # Stop any existing Ray processes first
+        self.logger.info("🧹 Cleaning up existing Ray processes...")
+        cleanup_cmd = 'export PATH="$HOME/.local/bin:$PATH" && ray stop'
+        cleanup_result = self.platform_utils.execute_command(cleanup_cmd, timeout=30)
+        self.logger.info(f"  Cleanup result: {'✅ Success' if cleanup_result.success else '⚠️ No cleanup needed'}")
+        
+        # Wait a moment for cleanup
+        import time
+        time.sleep(2)
+        
         # Execute Ray cluster join
         self.logger.info("⚡ Executing Ray cluster join...")
         result = self.platform_utils.execute_command(ray_cmd, timeout=120)

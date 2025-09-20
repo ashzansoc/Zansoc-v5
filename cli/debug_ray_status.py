@@ -66,12 +66,12 @@ else:
     print("Ray is not initialized - checking if we can connect...")
     try:
         ray.init(address="auto")
-        print("✅ Connected to local Ray cluster")
+        print("Connected to local Ray cluster")
         print("Cluster Address:", ray.get_runtime_context().gcs_address)
         print("Node ID:", ray.get_runtime_context().node_id.hex())
         ray.shutdown()
     except Exception as e:
-        print("❌ Failed to connect:", e)
+        print("Failed to connect:", e)
 '''
     
     run_command(f'python3 -c "{python_test}"', "Python Ray Test")
@@ -87,16 +87,16 @@ else:
     manual_connect = '''
 import ray
 import os
-os.environ['RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER'] = '1'
+os.environ["RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER"] = "1"
 try:
-    ray.init(address='100.101.84.71:6379', _redis_password='zansoc_secure_password_change_me')
-    print("✅ Successfully connected to ZanSoc cluster!")
+    ray.init(address="100.101.84.71:6379", _redis_password="zansoc_secure_password_change_me")
+    print("Successfully connected to ZanSoc cluster!")
     print("Cluster Address:", ray.get_runtime_context().gcs_address)
     print("Node ID:", ray.get_runtime_context().node_id.hex())
     print("Cluster Resources:", ray.cluster_resources())
     ray.shutdown()
 except Exception as e:
-    print("❌ Failed to connect to ZanSoc cluster:", e)
+    print("Failed to connect to ZanSoc cluster:", e)
 '''
     
     run_command(f'python3 -c "{manual_connect}"', "Manual ZanSoc Cluster Connection Test")
