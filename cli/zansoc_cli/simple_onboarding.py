@@ -167,22 +167,25 @@ class SimpleOnboarding:
     
     async def _install_ray_full(self) -> Dict[str, Any]:
         """Step 6: Install Ray in full form."""
-        # Try Ray with default extras
+        # Install Ray with all components as per your working manual steps
         commands = [
+            'python3 -m pip install --user "ray[default,data,train,tune,rllib]" --break-system-packages --quiet',
+            'python3 -m pip install --user "ray[default,data,train,tune,rllib]" --quiet',
             "python3 -m pip install --user 'ray[default]' --break-system-packages --quiet",
-            "python3 -m pip install --user 'ray[default]' --quiet",
-            "python3 -m pip install --user ray --break-system-packages --quiet",
-            "python3 -m pip install --user ray --quiet"
+            "python3 -m pip install --user 'ray[default]' --quiet"
         ]
         
         for cmd in commands:
             self.logger.info(f"Trying: {cmd}")
             result = self.platform_utils.execute_command(cmd, timeout=600)
             if result.success:
+                # Verify Ray CLI is accessible
+                path_check = self.platform_utils.execute_command("export PATH=\"$HOME/.local/bin:$PATH\" && which ray", timeout=10)
                 return {
                     'success': True,
                     'command': cmd,
-                    'method': 'pip_install'
+                    'method': 'pip_install',
+                    'ray_cli_path': path_check.stdout.strip() if path_check.success else 'Not in PATH'
                 }
         
         return {
@@ -227,48 +230,63 @@ class SimpleOnboarding:
             }
     
     async def _verify_ray_active(self) -> Dict[str, Any]:
-        """Step 8: Verify Ray is active."""
+        """Step 8: Verify Ray is active and CLI is accessible."""
         # Test Ray import
         import_result = self.platform_utils.execute_command(
             "python3 -c 'import ray; print(f\"Ray {ray.__version__} active\")'", 
             timeout=15
         )
         
+        # Test Ray CLI accessibility
+        cli_result = self.platform_utils.execute_command(
+            'export PATH="$HOME/.local/bin:$PATH" && ray --version',
+            timeout=10
+        )
+        
         if import_result.success:
             return {
                 'success': True,
                 'ray_version': import_result.stdout.strip(),
-                'import_working': True
+                'import_working': True,
+                'cli_accessible': cli_result.success,
+                'cli_version': cli_result.stdout.strip() if cli_result.success else 'CLI not accessible'
             }
         else:
             return {
                 'success': False,
                 'error': 'Ray import failed',
-                'details': import_result.stderr
+                'details': import_result.stderr,
+                'cli_accessible': cli_result.success
             }
     
     async def _join_ray_cluster(self) -> Dict[str, Any]:
-        """Step 9: Join Ray cluster with the exact command specified."""
-        # The exact command as specified
-        ray_cmd = f"export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1 && ray start --address='{self.cluster_address}' --redis-password='{self.cluster_password}'"
+        """Step 9: Join Ray cluster with the exact command that works manually."""
+        # Use the exact command sequence that works manually
+        ray_cmd = f'export PATH="$HOME/.local/bin:$PATH" && export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1 && ray start --address=\'{self.cluster_address}\' --redis-password=\'{self.cluster_password}\''
         
-        result = self.platform_utils.execute_command(ray_cmd, timeout=60)
+        self.logger.info(f"Executing Ray cluster join: {ray_cmd}")
+        result = self.platform_utils.execute_command(ray_cmd, timeout=120)
         
         if result.success:
-            # Verify connection
-            verify_cmd = "ray status"
+            # Verify connection with proper PATH
+            verify_cmd = 'export PATH="$HOME/.local/bin:$PATH" && ray status'
             verify_result = self.platform_utils.execute_command(verify_cmd, timeout=30)
             
             return {
                 'success': True,
                 'cluster_address': self.cluster_address,
                 'ray_command': ray_cmd,
-                'status': verify_result.stdout if verify_result.success else 'Connected but status unknown'
+                'status': verify_result.stdout if verify_result.success else 'Connected but status unknown',
+                'connection_output': result.stdout,
+                'verification_output': verify_result.stdout if verify_result.success else verify_result.stderr
             }
         else:
+            # Log detailed error information
+            self.logger.error(f"Ray cluster join failed: {result.stderr}")
             return {
                 'success': False,
                 'error': 'Ray cluster join failed',
                 'command': ray_cmd,
-                'details': result.stderr
+                'details': result.stderr,
+                'stdout': result.stdout
             }
