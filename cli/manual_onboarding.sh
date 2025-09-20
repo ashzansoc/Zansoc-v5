@@ -13,10 +13,15 @@ rm -rf zansoc-beta
 git clone https://github.com/ashzansoc/Zansoc-v5.git zansoc-beta
 cd zansoc-beta
 
-# Step 2: Install build dependencies
+# Step 2: Install build dependencies (skip if dependency conflicts)
 echo "🔧 Step 2: Installing build dependencies..."
 sudo apt update
-sudo apt install -y build-essential python3-dev python3-setuptools
+echo "Trying to install build dependencies..."
+sudo apt install -y build-essential || echo "⚠️ Build-essential installation failed, continuing..."
+# Try to install Python 3.13 specific dev packages
+sudo apt install -y python3.13-dev python3.13-venv || echo "⚠️ Python 3.13 dev packages not available, using pip fallback..."
+# Install setuptools via pip instead of apt
+python3 -m pip install --user setuptools wheel --break-system-packages || echo "⚠️ Setuptools installation failed, continuing..."
 
 # Step 3: Install requirements
 echo "📋 Step 3: Installing requirements.txt..."
