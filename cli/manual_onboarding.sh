@@ -13,9 +13,11 @@ rm -rf zansoc-beta
 git clone https://github.com/ashzansoc/Zansoc-v5.git zansoc-beta
 cd zansoc-beta
 
-# Step 2: Install build dependencies (skip if dependency conflicts)
-echo "🔧 Step 2: Installing build dependencies..."
+# Step 2: Check Python version and install dependencies
+echo "🔧 Step 2: Checking Python version and installing dependencies..."
 sudo apt update
+echo "Current Python version: $(python3 --version)"
+echo "⚠️ Note: Cluster requires Python 3.13.7, you have $(python3 --version)"
 echo "Trying to install build dependencies..."
 sudo apt install -y build-essential || echo "⚠️ Build-essential installation failed, continuing..."
 # Try to install Python 3.13 specific dev packages
@@ -26,8 +28,8 @@ python3 -m pip install --user setuptools wheel --break-system-packages || echo "
 # Step 3: Install Python packages (skip problematic netifaces)
 echo "📋 Step 3: Installing Python packages (skipping problematic packages)..."
 # Use python3 -m pip instead of just pip
-echo "Installing Ray with full components..."
-python3 -m pip install "ray[default,data,train,tune,rllib]>=2.45.0" --break-system-packages
+echo "Installing Ray with exact version to match cluster..."
+python3 -m pip install "ray[default,data,train,tune,rllib]==2.49.1" --break-system-packages
 
 echo "Installing core dependencies..."
 python3 -m pip install pyarrow>=14.0.1 protobuf>=4.25.1 requests>=2.31.0 --break-system-packages
@@ -56,7 +58,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 # Step 7: Connect to Ray cluster
 echo "🚀 Step 7: Connecting to Ray cluster..."
 export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1
-$HOME/.local/bin/ray start --address='100.101.84.71:6379' --redis-password='zansoc_secure_password_change_me'
+$HOME/.local/bin/ray start --address='100.101.84.71:6379'
 
 # Step 8: Verify connection
 echo "✅ Step 8: Verifying Ray connection..."
