@@ -1,7 +1,8 @@
 #!/bin/bash
 # Manual onboarding script that replicates your working steps exactly
 
-set -e
+# Remove set -e to prevent silent exits on errors
+# set -e
 
 echo "🚀 ZanSoc Manual Onboarding (ARM64 Optimized)"
 echo "=============================================="
@@ -67,8 +68,9 @@ echo "🔑 Generating fresh Tailscale auth key..."
 TAILSCALE_API_KEY="tskey-api-kUiNJcs8B411CNTRL-2MMcK5h1hxJcfJQ8CyHRyJL8yoKv5QCc"
 TAILNET="ashzansoc@gmail.com"
 
-# Create ephemeral auth key that expires in 1 hour
-AUTH_KEY_RESPONSE=$(curl -s -X POST \
+echo "📡 Making API call to Tailscale (timeout: 30s)..."
+# Create ephemeral auth key that expires in 1 hour with timeout
+AUTH_KEY_RESPONSE=$(timeout 30 curl -s -X POST \
   "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/keys" \
   -H "Authorization: Bearer ${TAILSCALE_API_KEY}" \
   -H "Content-Type: application/json" \
@@ -84,25 +86,54 @@ AUTH_KEY_RESPONSE=$(curl -s -X POST \
       }
     },
     "expirySeconds": 3600,
-    "description": "ZanSoc worker - '$(hostname)' - '$(date)'"
-  }')
+    "description": "ZanSoc worker - '"$(hostname)"' - '"$(date)"'"
+  }' 2>&1)
+
+API_EXIT_CODE=$?
+echo "📊 API call completed with exit code: $API_EXIT_CODE"
+echo "📋 API Response: $AUTH_KEY_RESPONSE"
 
 # Extract the auth key from the response
-EPHEMERAL_AUTH_KEY=$(echo "$AUTH_KEY_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['key'])" 2>/dev/null)
+if [ $API_EXIT_CODE -eq 124 ]; then
+    echo "⏰ API call timed out after 30 seconds"
+    EPHEMERAL_AUTH_KEY=""
+elif [ $API_EXIT_CODE -ne 0 ]; then
+    echo "❌ API call failed with exit code $API_EXIT_CODE"
+    EPHEMERAL_AUTH_KEY=""
+else
+    EPHEMERAL_AUTH_KEY=$(echo "$AUTH_KEY_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['key'])" 2>/dev/null)
+fi
 
 if [ -z "$EPHEMERAL_AUTH_KEY" ]; then
-    echo "❌ Failed to generate ephemeral auth key. Response:"
-    echo "$AUTH_KEY_RESPONSE"
+    echo "❌ Failed to generate ephemeral auth key."
+    echo "📋 Full response: $AUTH_KEY_RESPONSE"
     echo ""
     echo "🔄 Falling back to manual authentication..."
     echo "Please run: sudo tailscale up"
     echo "Then follow the authentication URL in your browser"
     read -p "Press Enter after completing Tailscale authentication..."
+    sudo tailscale up
 else
     echo "✅ Generated fresh auth key successfully!"
     echo "🔗 Connecting to Tailscale with ephemeral key..."
-    sudo tailscale up --auth-key="$EPHEMERAL_AUTH_KEY"
-    echo "✅ Connected to Tailscale successfully!"
+    if sudo tailscale up --auth-key="$EPHEMERAL_AUTH_KEY"; then
+        echo "✅ Connected to Tailscale successfully!"
+    else
+        echo "❌ Failed to connect to Tailscale with generated key"
+        echo "🔄 Trying manual authentication..."
+        sudo tailscale up
+    fi
+fi
+
+# Verify Tailscale connection
+echo "🔍 Verifying Tailscale connection..."
+sleep 2
+if tailscale status > /dev/null 2>&1; then
+    echo "✅ Tailscale is connected"
+else
+    echo "⚠️ Tailscale connection issue detected"
+    echo "Current status:"
+    tailscale status || echo "Failed to get status"
 fi
 
 # Step 6: Get Tailscale IP
@@ -120,12 +151,23 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 echo ""
 echo "🚀 Step 8: Connecting to Ray cluster..."
 export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1
-$HOME/.local/bin/ray start --address='100.101.84.71:6379'
+if $HOME/.local/bin/ray start --address='100.101.84.71:6379'; then
+    echo "✅ Ray cluster connection initiated"
+else
+    echo "❌ Failed to connect to Ray cluster"
+    echo "This might be due to network issues or cluster unavailability"
+fi
 
 # Step 9: Verify connection
+echo ""
 echo "✅ Step 9: Verifying Ray connection..."
 sleep 3
-$HOME/.local/bin/ray status
+if $HOME/.local/bin/ray status; then
+    echo "✅ Ray cluster connection verified"
+else
+    echo "⚠️ Ray status check failed"
+    echo "The cluster might still be connecting..."
+fi
 
 echo ""
 echo "🎉 Manual onboarding complete!"
