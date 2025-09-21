@@ -62,9 +62,48 @@ echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.conf
 echo 'net.ipv6.conf.all.forwarding = 1' | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
-# Connect to Tailscale with valid auth key
-echo "🔑 Connecting to Tailscale..."
-sudo tailscale up --auth-key=tskey-auth-kSLcy3yUkC11CNTRL-jjw67dQPeGZVKCA8MUBHHZcdvEaF5k1C
+# Generate fresh auth key via Tailscale API
+echo "🔑 Generating fresh Tailscale auth key..."
+TAILSCALE_API_KEY="tskey-api-kUiNJcs8B411CNTRL-2MMcK5h1hxJcfJQ8CyHRyJL8yoKv5QCc"
+TAILNET="ashzansoc@gmail.com"
+
+# Create ephemeral auth key that expires in 1 hour
+AUTH_KEY_RESPONSE=$(curl -s -X POST \
+  "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/keys" \
+  -H "Authorization: Bearer ${TAILSCALE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "capabilities": {
+      "devices": {
+        "create": {
+          "reusable": false,
+          "ephemeral": true,
+          "preauthorized": true,
+          "tags": ["tag:zansoc-worker"]
+        }
+      }
+    },
+    "expirySeconds": 3600,
+    "description": "ZanSoc worker - '$(hostname)' - '$(date)'"
+  }')
+
+# Extract the auth key from the response
+EPHEMERAL_AUTH_KEY=$(echo "$AUTH_KEY_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['key'])" 2>/dev/null)
+
+if [ -z "$EPHEMERAL_AUTH_KEY" ]; then
+    echo "❌ Failed to generate ephemeral auth key. Response:"
+    echo "$AUTH_KEY_RESPONSE"
+    echo ""
+    echo "🔄 Falling back to manual authentication..."
+    echo "Please run: sudo tailscale up"
+    echo "Then follow the authentication URL in your browser"
+    read -p "Press Enter after completing Tailscale authentication..."
+else
+    echo "✅ Generated fresh auth key successfully!"
+    echo "🔗 Connecting to Tailscale with ephemeral key..."
+    sudo tailscale up --auth-key="$EPHEMERAL_AUTH_KEY"
+    echo "✅ Connected to Tailscale successfully!"
+fi
 
 # Step 6: Get Tailscale IP
 echo "📍 Step 6: Getting Tailscale IP..."
