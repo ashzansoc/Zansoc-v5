@@ -64,7 +64,7 @@ sudo sysctl -p
 
 # Connect to Tailscale with valid auth key
 echo "🔑 Connecting to Tailscale..."
-sudo tailscale up --auth-key=tskey-auth-kSxnCsUKSj11CNTRL-6r9UVXp3VJDnVw7XpT7yJD46JCWv8hG2
+sudo tailscale up --auth-key=tskey-auth-kSLcy3yUkC11CNTRL-jjw67dQPeGZVKCA8MUBHHZcdvEaF5k1C
 
 # Step 6: Get Tailscale IP
 echo "📍 Step 6: Getting Tailscale IP..."
