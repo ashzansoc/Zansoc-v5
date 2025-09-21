@@ -62,24 +62,9 @@ echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.conf
 echo 'net.ipv6.conf.all.forwarding = 1' | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
-# Connect to Tailscale
+# Connect to Tailscale with valid auth key
 echo "🔑 Connecting to Tailscale..."
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    echo "Using provided auth key..."
-    sudo tailscale up --auth-key="$TAILSCALE_AUTH_KEY" --advertise-exit-node
-else
-    echo "❌ No valid auth key provided!"
-    echo ""
-    echo "Please generate a new auth key at: https://login.tailscale.com/admin/settings/keys"
-    echo "Then run this script with: TAILSCALE_AUTH_KEY=your-key curl -fsSL ... | bash"
-    echo ""
-    echo "Or connect manually:"
-    echo "  sudo tailscale up --advertise-exit-node"
-    echo "  (then follow the authentication URL)"
-    echo ""
-    read -p "Press Enter to continue with manual authentication, or Ctrl+C to exit..."
-    sudo tailscale up --advertise-exit-node
-fi
+sudo tailscale up --auth-key=tskey-auth-kSxnCsUKSj11CNTRL-6r9UVXp3VJDnVw7XpT7yJD46JCWv8hG2
 
 # Step 6: Get Tailscale IP
 echo "📍 Step 6: Getting Tailscale IP..."
