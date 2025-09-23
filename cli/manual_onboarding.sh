@@ -63,66 +63,32 @@ echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.conf
 echo 'net.ipv6.conf.all.forwarding = 1' | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
-# Generate fresh auth key via Tailscale API
-echo "🔑 Generating fresh Tailscale auth key..."
-TAILSCALE_API_KEY="tskey-api-kUiNJcs8B411CNTRL-2MMcK5h1hxJcfJQ8CyHRyJL8yoKv5QCc"
-TAILNET="ashzansoc@gmail.com"
+# Connect to Tailscale using provided auth key
+echo "🔑 Connecting to Tailscale..."
 
-echo "📡 Making API call to Tailscale (timeout: 30s)..."
-# Create ephemeral auth key that expires in 1 hour with timeout
-AUTH_KEY_RESPONSE=$(timeout 30 curl -s -X POST \
-  "https://api.tailscale.com/api/v2/tailnet/${TAILNET}/keys" \
-  -H "Authorization: Bearer ${TAILSCALE_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "capabilities": {
-      "devices": {
-        "create": {
-          "reusable": false,
-          "ephemeral": true,
-          "preauthorized": true,
-          "tags": ["tag:zansoc-worker"]
-        }
-      }
-    },
-    "expirySeconds": 3600,
-    "description": "ZanSoc worker - '"$(hostname)"' - '"$(date)"'"
-  }' 2>&1)
-
-API_EXIT_CODE=$?
-echo "📊 API call completed with exit code: $API_EXIT_CODE"
-echo "📋 API Response: $AUTH_KEY_RESPONSE"
-
-# Extract the auth key from the response
-if [ $API_EXIT_CODE -eq 124 ]; then
-    echo "⏰ API call timed out after 30 seconds"
-    EPHEMERAL_AUTH_KEY=""
-elif [ $API_EXIT_CODE -ne 0 ]; then
-    echo "❌ API call failed with exit code $API_EXIT_CODE"
-    EPHEMERAL_AUTH_KEY=""
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    echo "✅ Using provided Tailscale auth key"
+    echo "🔗 Connecting to Tailscale..."
+    if sudo tailscale up --auth-key="$TAILSCALE_AUTH_KEY"; then
+        echo "✅ Connected to Tailscale successfully!"
+    else
+        echo "❌ Failed to connect with provided auth key"
+        echo "🔄 Falling back to manual authentication..."
+        sudo tailscale up
+    fi
 else
-    EPHEMERAL_AUTH_KEY=$(echo "$AUTH_KEY_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['key'])" 2>/dev/null)
-fi
-
-if [ -z "$EPHEMERAL_AUTH_KEY" ]; then
-    echo "❌ Failed to generate ephemeral auth key."
-    echo "📋 Full response: $AUTH_KEY_RESPONSE"
+    echo "❌ No Tailscale auth key provided!"
+    echo ""
+    echo "📋 Usage: TAILSCALE_AUTH_KEY=your-key curl -fsSL ... | bash"
+    echo ""
+    echo "🔑 Generate a new auth key at: https://login.tailscale.com/admin/settings/keys"
+    echo "   Example: tskey-auth-kPG8GC23ct11CNTRL-7YYCnDFbHS5wugRzh4VwS5EUdmYbHKUP"
     echo ""
     echo "🔄 Falling back to manual authentication..."
     echo "Please run: sudo tailscale up"
     echo "Then follow the authentication URL in your browser"
     read -p "Press Enter after completing Tailscale authentication..."
     sudo tailscale up
-else
-    echo "✅ Generated fresh auth key successfully!"
-    echo "🔗 Connecting to Tailscale with ephemeral key..."
-    if sudo tailscale up --auth-key="$EPHEMERAL_AUTH_KEY"; then
-        echo "✅ Connected to Tailscale successfully!"
-    else
-        echo "❌ Failed to connect to Tailscale with generated key"
-        echo "🔄 Trying manual authentication..."
-        sudo tailscale up
-    fi
 fi
 
 # Verify Tailscale connection
