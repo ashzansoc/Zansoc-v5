@@ -4,6 +4,16 @@
 # Remove set -e to prevent silent exits on errors
 # set -e
 
+# Parse command line arguments or environment variable
+if [ -n "$1" ]; then
+    TAILSCALE_AUTH_KEY="$1"
+    echo "🔑 Using auth key from command line argument"
+elif [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    echo "🔑 Using auth key from environment variable"
+else
+    echo "⚠️ No auth key provided via argument or environment variable"
+fi
+
 echo "🚀 ZanSoc Manual Onboarding (ARM64 Optimized)"
 echo "=============================================="
 
